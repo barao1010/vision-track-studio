@@ -31,5 +31,24 @@ class TargetControllerTests(unittest.TestCase):
         controller.update(100, 100, {}, now=2)
         self.assertEqual(("stop",), ptz.commands[-1])
 
+    def test_no_repeated_stop_when_target_remains_lost(self):
+        ptz = MockPTZ()
+        controller = TargetPTZController(ptz)
+        controller.select(1)
+        controller.update(100, 100, {1: Box(65, 45, 15, 15)}, now=1)
+        controller.update(100, 100, {}, now=2)
+        count = len(ptz.commands)
+        controller.update(100, 100, {}, now=3)
+        self.assertEqual(count, len(ptz.commands))
+
+    def test_switch_target_resets_throttle(self):
+        ptz = MockPTZ()
+        controller = TargetPTZController(ptz)
+        controller.select(1)
+        controller.update(100, 100, {1: Box(65, 45, 15, 15)}, now=1)
+        controller.select(2)
+        controller.update(100, 100, {2: Box(5, 45, 15, 15)}, now=1.01)
+        self.assertLess(ptz.commands[-1][1], 0)
+
 if __name__ == "__main__":
     unittest.main()
