@@ -5,9 +5,12 @@ Standalone companion while native OBS Qt integration is being developed.
 Only connect to cameras you own or are authorized to control.
 """
 import argparse
+import base64
+import hashlib
 import os
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 import cv2
 import requests
 from requests.auth import HTTPDigestAuth
@@ -24,6 +27,7 @@ class OnvifPTZ:
         if not profile:
             raise ValueError("ONVIF profile token is required")
         self.url, self.profile, self.timeout = url, profile, timeout
+        self.username, self.password = username, password
         self.invert_pan, self.invert_tilt = invert_pan, invert_tilt
         self.http = requests.Session()
         self.http.auth = HTTPDigestAuth(username, password)
@@ -32,6 +36,22 @@ class OnvifPTZ:
 
     def send(self, action, payload):
         env = ET.Element(f"{{{SOAP}}}Envelope")
+        wsse = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+        wsu = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
+        nonce = os.urandom(16)
+        created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        digest = base64.b64encode(hashlib.sha1(nonce + created.encode() + self.password.encode()).digest()).decode()
+        header = ET.SubElement(env, f"{{{SOAP}}}Header")
+        security = ET.SubElement(header, f"{{{wsse}}}Security")
+        token = ET.SubElement(security, f"{{{wsse}}}UsernameToken")
+        ET.SubElement(token, f"{{{wsse}}}Username").text = self.username
+        password = ET.SubElement(token, f"{{{wsse}}}Password")
+        password.set("Type", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest")
+        password.text = digest
+        nonce_node = ET.SubElement(token, f"{{{wsse}}}Nonce")
+        nonce_node.set("EncodingType", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary")
+        nonce_node.text = base64.b64encode(nonce).decode()
+        ET.SubElement(token, f"{{{wsu}}}Created").text = created
         body = ET.SubElement(env, f"{{{SOAP}}}Body")
         node = ET.SubElement(body, f"{{{PTZ}}}{action}")
         ET.SubElement(node, f"{{{PTZ}}}ProfileToken").text = self.profile
