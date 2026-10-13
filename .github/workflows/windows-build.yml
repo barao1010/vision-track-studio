@@ -49,7 +49,7 @@ jobs:
           python vision-track-studio/scripts/generate_identity.py obs-studio
       - name: Configure Windows
         working-directory: obs-studio
-        run: cmake --preset windows-x64 -DOBS_VERSION_OVERRIDE=33.0.0-rc1-vts-preview
+        run: cmake --preset windows-x64 "-DOBS_VERSION_OVERRIDE=33.0.0-rc1-vts-preview"
       - name: Build Windows
         working-directory: obs-studio
         run: cmake --build --preset windows-x64 --config RelWithDebInfo --parallel 4
