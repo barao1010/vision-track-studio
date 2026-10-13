@@ -8,7 +8,6 @@ import argparse
 import os
 import time
 import xml.etree.ElementTree as ET
-from urllib.parse import urlparse
 import cv2
 import requests
 from requests.auth import HTTPDigestAuth
@@ -19,12 +18,13 @@ SOAP = "http://www.w3.org/2003/05/soap-envelope"
 PTZ = "http://www.onvif.org/ver20/ptz/wsdl"
 
 class OnvifPTZ:
-    def __init__(self, url, profile, username, password, timeout=3):
+    def __init__(self, url, profile, username, password, timeout=3, invert_pan=False, invert_tilt=False):
         if not url.startswith(("http://", "https://")):
             raise ValueError("PTZ endpoint must be HTTP(S)")
         if not profile:
             raise ValueError("ONVIF profile token is required")
         self.url, self.profile, self.timeout = url, profile, timeout
+        self.invert_pan, self.invert_tilt = invert_pan, invert_tilt
         self.http = requests.Session()
         self.http.auth = HTTPDigestAuth(username, password)
         self.http.headers["Content-Type"] = "application/soap+xml; charset=utf-8"
@@ -47,6 +47,10 @@ class OnvifPTZ:
             raise RuntimeError("Invalid ONVIF XML response") from exc
 
     def move(self, pan, tilt, zoom):
+        if self.invert_pan:
+            pan = -pan
+        if self.invert_tilt:
+            tilt = -tilt
         def content(node):
             v = ET.SubElement(node, f"{{{PTZ}}}Velocity")
             xy = ET.SubElement(v, "{http://www.onvif.org/ver10/schema}PanTilt")
@@ -54,6 +58,7 @@ class OnvifPTZ:
             xy.set("y", str(round(max(-1, min(1, tilt)), 4)))
             z = ET.SubElement(v, "{http://www.onvif.org/ver10/schema}Zoom")
             z.set("x", str(round(max(-1, min(1, zoom)), 4)))
+            ET.SubElement(node, f"{{{PTZ}}}Timeout").text = "PT0.5S"
         self.send("ContinuousMove", content)
 
     def stop(self):
@@ -82,7 +87,8 @@ def main():
     password = os.environ.get("VTS_PTZ_PASSWORD")
     if not args.username or password is None:
         parser.error("Set VTS_PTZ_USER and VTS_PTZ_PASSWORD environment variables")
-    camera = OnvifPTZ(args.ptz_url, args.profile_token, args.username, password)
+    camera = OnvifPTZ(args.ptz_url, args.profile_token, args.username, password,
+                      invert_pan=args.invert_pan, invert_tilt=args.invert_tilt)
     stream = cv2.VideoCapture(args.rtsp)
     if not stream.isOpened():
         camera.stop()
@@ -106,6 +112,7 @@ def main():
         while True:
             ok, frame = stream.read()
             if not ok:
+                camera.stop()
                 failure_count += 1
                 if failure_count >= 8:
                     break
