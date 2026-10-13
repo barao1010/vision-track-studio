@@ -36,8 +36,8 @@ jobs:
           ref: f082210c177a03572cace88c168d0f32d8cde39e
           path: obs-studio
           submodules: recursive
-          fetch-depth: 1
-          fetch-tags: false
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -49,7 +49,7 @@ jobs:
           python vision-track-studio/scripts/generate_identity.py obs-studio
       - name: Configure Windows
         working-directory: obs-studio
-        run: cmake --preset windows-x64 "-DOBS_VERSION_OVERRIDE=33.0.0-rc1-vts-preview"
+        run: cmake --preset windows-x64
       - name: Build Windows
         working-directory: obs-studio
         run: cmake --build --preset windows-x64 --config RelWithDebInfo --parallel 4
@@ -98,3 +98,4 @@ jobs:
         run: |
           $tag = "v0.1.0-preview.${{ github.run_number }}"
           gh release create $tag Vision-Track-Studio-Windows-preview.zip Vision-Track-Studio-Setup-preview.exe Vision-Track-Studio-Source.zip --repo '${{ github.repository }}' --target '${{ github.sha }}' --prerelease --title "Vision Track Studio $tag" --notes 'Windows preview based on OBS. Includes native PTZ connection and target-selection dock. Experimental visual tracking; real camera, broadcast, audio and UI validation remain required. Corresponding GPL sources included. Not a final production release.'
+

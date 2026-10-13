@@ -87,6 +87,14 @@ class OnvifPTZ:
             ET.SubElement(node, f"{{{PTZ}}}Zoom").text = "true"
         self.send("Stop", content)
 
+    def preset(self, number, save=False):
+        def content(node):
+            ET.SubElement(node, f"{{{PTZ}}}PresetToken").text = str(int(number))
+        self.send("SetPreset" if save else "GotoPreset", content)
+
+    def home(self):
+        self.send("GotoHomePosition", lambda node: None)
+
 def tracker_factory():
     legacy = getattr(cv2, "legacy", None)
     if legacy and hasattr(legacy, "TrackerCSRT_create"):
@@ -176,3 +184,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

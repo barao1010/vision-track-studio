@@ -25,3 +25,14 @@ A URL RTSP e o token ONVIF variam por fabricante. **Não copie passwords para Gi
 
 ## Integração futura
 Validação de identidade em cruzamentos reais, descoberta automática ONVIF, VISCA e testes com modelos de câmera reais continuam pendentes. O modelo YOLOX e o helper OpenCV Zoo são Apache-2.0; veja models/LICENSE-YOLOX.txt. Preservar licenças OBS e componentes terceiros.
+
+
+## Controlos alinhados com Vision Track AI
+
+Escolha ONVIF, VISCA IP (UDP com cabeçalho de sequência), VISCA Serial ou Pelco-D. Para VISCA IP indique host e porta (normalmente 52381). Para serial indique COM e baud rate; Pelco-D permite serial ou TCP e endereço da câmera. Ajuste inversões de eixo conforme a instalação.
+
+Cinema, Suave e Dinâmico usam os parâmetros de movimento do Vision Track AI. O enquadramento conserva margem acima do corpo e espaço na direção do movimento. A referência de aparência permanece fixa à pessoa selecionada. Após uma perda temporária, três novas deteções consistentes são necessárias para retomar; depois de uma ambiguidade são exigidas cinco confirmações e rejeição das aparências concorrentes. Pessoas indistinguíveis podem exigir seleção manual.
+
+Segure as setas ou Zoom +/- para controlo manual. Soltar envia Stop; a sessão manual também expira se deixar de receber comandos. O controlo manual cancela o alvo selecionado. Escolha o número do preset e use Ir ao preset, Guardar preset ou Posição inicial (esta última não é suportada por Pelco-D).
+
+Esta integração é para PTZ física. O recorte digital automático de fontes fixas, troca entre várias câmeras e joystick físico do app anterior ainda não foram integrados ao pipeline nativo do OBS. O detector de pessoas continua YOLOX no Studio; o app anterior usa COCO-SSD. Não há garantia de identidade absoluta com roupas semelhantes. A descoberta automática ONVIF não é implementada nesta revisão.

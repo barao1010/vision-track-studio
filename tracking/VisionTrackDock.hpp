@@ -2,6 +2,10 @@
 #pragma once
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QGridLayout>
+#include <QScrollArea>
 #include <QDoubleSpinBox>
 #include <QDockWidget>
 #include <QFormLayout>
@@ -18,6 +22,7 @@
 #include <QPushButton>
 #include <QTimer>
 #include <functional>
+#include <utility>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -67,7 +72,11 @@ protected:
 
 class VisionTrackDock : public QDockWidget {
     QProcess worker;
-    QLineEdit *video, *ptz, *profile, *user, *password;
+    QLineEdit *video, *ptz, *profile, *user, *password, *host, *serialPort;
+    QComboBox *protocol, *motionPreset;
+    QSpinBox *port, *baud, *address, *presetNumber;
+    QTimer manualTimer;
+    QJsonObject manualCommand;
     QCheckBox *invertPan, *invertTilt;
     QDoubleSpinBox *speed;
     QLabel *status;
@@ -81,6 +90,7 @@ class VisionTrackDock : public QDockWidget {
     }
     void shutdown() {
         watchdog.stop();
+        manualTimer.stop();
         send(QJsonObject{{"action", "quit"}});
         if (!worker.waitForFinished(2500)) {
             worker.kill();
@@ -92,6 +102,28 @@ public:
         setObjectName(QStringLiteral("visionTrackDock"));
         auto *body = new QWidget(this);
         auto *layout = new QFormLayout(body);
+        protocol = new QComboBox(body);
+        protocol->addItem(QStringLiteral("ONVIF"), QStringLiteral("onvif"));
+        protocol->addItem(QStringLiteral("VISCA IP (UDP)"), QStringLiteral("visca_ip"));
+        protocol->addItem(QStringLiteral("VISCA Serial"), QStringLiteral("visca_serial"));
+        protocol->addItem(QStringLiteral("Pelco-D"), QStringLiteral("pelco_d"));
+        layout->addRow(QStringLiteral("Protocolo PTZ"), protocol);
+        host = new QLineEdit(body); host->setPlaceholderText(QStringLiteral("192.168.1.100"));
+        port = new QSpinBox(body); port->setRange(1, 65535); port->setValue(52381);
+        serialPort = new QLineEdit(body); serialPort->setPlaceholderText(QStringLiteral("COM3"));
+        baud = new QSpinBox(body); baud->setRange(1200, 115200); baud->setValue(9600);
+        address = new QSpinBox(body); address->setRange(1, 255); address->setValue(1);
+        layout->addRow(QStringLiteral("IP / host (VISCA / Pelco)"), host);
+        layout->addRow(QStringLiteral("Porta de rede"), port);
+        layout->addRow(QStringLiteral("Porta serial (COM)"), serialPort);
+        layout->addRow(QStringLiteral("Baud rate"), baud);
+        layout->addRow(QStringLiteral("Endereço Pelco-D"), address);
+        QObject::connect(protocol, &QComboBox::currentIndexChanged, this, [this]() {
+            const auto kind = protocol->currentData().toString();
+            port->setValue(kind == "visca_ip" ? 52381 : kind == "pelco_d" ? 4001 : 80);
+            baud->setValue(kind == "pelco_d" ? 2400 : 9600);
+            invertTilt->setChecked(kind == "onvif");
+        });
         video = new QLineEdit(body); video->setPlaceholderText(QStringLiteral("rtsp://câmera/stream"));
         ptz = new QLineEdit(body); ptz->setPlaceholderText(QStringLiteral("http://câmera/onvif/ptz_service"));
         profile = new QLineEdit(body);
@@ -106,15 +138,55 @@ public:
         invertTilt = new QCheckBox(QStringLiteral("Inverter eixo vertical (ONVIF)"), body);
         invertTilt->setChecked(true);
         layout->addRow(invertPan); layout->addRow(invertTilt);
-        speed = new QDoubleSpinBox(body); speed->setRange(.05, .5); speed->setSingleStep(.05); speed->setValue(.15);
+        speed = new QDoubleSpinBox(body); speed->setRange(.05, .6); speed->setSingleStep(.05); speed->setValue(.32);
         layout->addRow(QStringLiteral("Velocidade máxima"), speed);
+        motionPreset = new QComboBox(body);
+        motionPreset->addItem(QStringLiteral("Cinema"), QStringLiteral("cinema"));
+        motionPreset->addItem(QStringLiteral("Suave"), QStringLiteral("suave"));
+        motionPreset->addItem(QStringLiteral("Dinâmico"), QStringLiteral("dinamico"));
+        layout->addRow(QStringLiteral("Perfil de movimento"), motionPreset);
         connectButton = new QPushButton(QStringLiteral("Ligar / desligar câmera"), body);
         layout->addRow(connectButton);
         preview = new VTPreview(body); layout->addRow(preview);
         auto *stop = new QPushButton(QStringLiteral("PARAR RASTREIO"), body); layout->addRow(stop);
         status = new QLabel(QStringLiteral("Pronto. Credenciais guardadas apenas nesta sessão."), body);
         status->setWordWrap(true); layout->addRow(status);
-        setWidget(body);
+        auto *manualBody = new QWidget(body);
+        auto *manualLayout = new QGridLayout(manualBody);
+        manualTimer.setInterval(100);
+        QObject::connect(&manualTimer, &QTimer::timeout, this, [this]() { send(manualCommand); });
+        auto addManual = [this, manualBody, manualLayout](const QString &label, int row, int col, double pan, double tilt, double zoom) {
+            auto *button = new QPushButton(label, manualBody);
+            manualLayout->addWidget(button, row, col);
+            QObject::connect(button, &QPushButton::pressed, this, [this, pan, tilt, zoom]() {
+                manualCommand = QJsonObject{{"action", "manual"}, {"pan", pan * speed->value()},
+                                             {"tilt", tilt * speed->value()}, {"zoom", zoom * .15}};
+                send(manualCommand); manualTimer.start();
+            });
+            QObject::connect(button, &QPushButton::released, this, [this]() {
+                manualTimer.stop(); send(QJsonObject{{"action", "stop"}});
+            });
+        };
+        addManual(QStringLiteral("↑"), 0, 1, 0, -1, 0);
+        addManual(QStringLiteral("←"), 1, 0, -1, 0, 0);
+        addManual(QStringLiteral("→"), 1, 2, 1, 0, 0);
+        addManual(QStringLiteral("↓"), 2, 1, 0, 1, 0);
+        addManual(QStringLiteral("Zoom −"), 3, 0, 0, 0, -1);
+        addManual(QStringLiteral("Zoom +"), 3, 2, 0, 0, 1);
+        layout->addRow(QStringLiteral("Controlo manual"), manualBody);
+        presetNumber = new QSpinBox(body); presetNumber->setRange(1, 127); presetNumber->setValue(1);
+        layout->addRow(QStringLiteral("Número do preset"), presetNumber);
+        for (const auto &entry : {std::pair<const char *, const char *>{"Ir ao preset", "preset_recall"},
+                                 {"Guardar preset", "preset_save"}, {"Posição inicial", "home"}}) {
+            auto *button = new QPushButton(QString::fromUtf8(entry.first), body);
+            const QString action = QString::fromUtf8(entry.second);
+            layout->addRow(button);
+            QObject::connect(button, &QPushButton::clicked, this, [this, action]() {
+                manualTimer.stop(); send(QJsonObject{{"action", action}, {"number", presetNumber->value()}});
+            });
+        }
+        auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setWidget(body);
+        setWidget(scroll);
         worker.setProcessChannelMode(QProcess::SeparateChannels);
 #ifdef Q_OS_WIN
         worker.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) {
@@ -128,8 +200,12 @@ public:
         });
         QObject::connect(connectButton, &QPushButton::clicked, this, [this]() {
             if (worker.state() != QProcess::NotRunning) { shutdown(); return; }
-            if (video->text().isEmpty() || ptz->text().isEmpty() || profile->text().isEmpty() || user->text().isEmpty()) {
-                status->setText(QStringLiteral("Preencha vídeo, serviço ONVIF, perfil e utilizador.")); return;
+            const QString kind = protocol->currentData().toString();
+            const bool invalidConnection = kind == "onvif" ? (ptz->text().isEmpty() || profile->text().isEmpty())
+                : kind == "visca_serial" ? serialPort->text().isEmpty()
+                : kind == "pelco_d" ? (host->text().isEmpty() && serialPort->text().isEmpty()) : host->text().isEmpty();
+            if (video->text().isEmpty() || invalidConnection) {
+                status->setText(QStringLiteral("Preencha vídeo e os dados de ligação do protocolo selecionado.")); return;
             }
             pending.clear();
             auto env = QProcessEnvironment::systemEnvironment();
@@ -142,7 +218,10 @@ public:
         QObject::connect(&worker, &QProcess::started, this, [this]() {
             send(QJsonObject{{"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
                              {"invertPan", invertPan->isChecked()}, {"invertTilt", invertTilt->isChecked()},
-                             {"speed", speed->value()}});
+                             {"speed", speed->value()}, {"protocol", protocol->currentData().toString()},
+                             {"preset", motionPreset->currentData().toString()}, {"host", host->text()},
+                             {"port", port->value()}, {"serial", serialPort->text()}, {"baud", baud->value()},
+                             {"address", address->value()}});
             watchdog.start(15000);
         });
         QObject::connect(&worker, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
@@ -163,10 +242,11 @@ public:
             if (pending.size() > 4000000) shutdown();
         });
         QObject::connect(&worker, &QProcess::readyReadStandardError, this, [this]() { worker.readAllStandardError(); });
-        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { watchdog.stop(); });
-        QObject::connect(stop, &QPushButton::clicked, this, [this]() { send(QJsonObject{{"action", "stop"}}); });
+        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { watchdog.stop(); manualTimer.stop(); });
+        QObject::connect(stop, &QPushButton::clicked, this, [this]() { manualTimer.stop(); send(QJsonObject{{"action", "stop"}}); });
         preview->selected = [this](QJsonArray box) { send(QJsonObject{{"action", "select"}, {"box", box}}); };
         QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { shutdown(); });
     }
     ~VisionTrackDock() override { shutdown(); }
 };
+

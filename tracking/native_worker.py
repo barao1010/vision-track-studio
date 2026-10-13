@@ -9,7 +9,9 @@ import time
 
 import cv2
 import numpy as np
-from ptz_companion import OnvifPTZ, tracker_factory
+from protocol_drivers import create_camera
+from identity_tracker import IdentityTracker
+from cinema_controller import CinemaPTZController
 from ptz_target_controller import Box, TargetPTZController
 from ai_detector import PersonDetector, distinct_match
 
@@ -31,15 +33,16 @@ def main():
 
     threading.Thread(target=read_commands, daemon=True).start()
     camera = stream = controller = None
-    tracker = reference = None
+    identity = IdentityTracker()
+    manual = None
+    manual_until = 0
     try:
         config = commands.get(timeout=15)
         emit(status="A carregar o detector de pessoas por IA…")
         detector = PersonDetector()
-        camera = OnvifPTZ(config["ptz"], config["profile"], os.environ["VTS_PTZ_USER"],
-                          os.environ["VTS_PTZ_PASSWORD"], invert_pan=config.get("invertPan", False),
-                          invert_tilt=config.get("invertTilt", True))
-        controller = TargetPTZController(camera, max_speed=max(.05, min(.5, float(config.get("speed", .15)))))
+        camera = create_camera(config, os.environ.get("VTS_PTZ_USER", ""), os.environ.get("VTS_PTZ_PASSWORD", ""))
+        controller = CinemaPTZController(camera, preset=config.get("preset", "cinema"),
+                                         max_speed=max(.05, min(.6, float(config.get("speed", .32)))))
         stream = cv2.VideoCapture(config["video"], cv2.CAP_FFMPEG,
                                  [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
                                   cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000])
@@ -64,11 +67,13 @@ def main():
                     return
                 if action == "stop":
                     controller.stop()
-                    tracker = reference = None
+                    identity.clear()
+                    manual = None
                     emit(status="Rastreio parado.")
                 elif action == "select":
                     controller.stop()
-                    tracker = reference = None
+                    identity.clear()
+                    manual = None
                     x, y, bw, bh = [int(v) for v in command["box"]]
                     x, y = max(0, min(x, w - 1)), max(0, min(y, h - 1))
                     bw, bh = min(bw, w - x), min(bh, h - y)
@@ -80,24 +85,50 @@ def main():
                         emit(status="A IA não encontrou uma pessoa distinta nessa área. Selecione novamente.")
                         continue
                     x, y, bw, bh = matched
-                    tracker = tracker_factory()
-                    tracker.init(frame, (x, y, bw, bh))
-                    reference = histogram(frame[y:y + bh, x:x + bw])
-                    controller.select(1)
+                    identity.select((x, y, bw, bh), appearance(frame, (x, y, bw, bh)), time.monotonic())
                     emit(status="Alvo selecionado. Rastreio ativo.")
-            if tracker is not None:
-                found, box = tracker.update(frame)
-                x, y, bw, bh = [int(v) for v in box]
-                crop = frame[max(0, y):min(h, y + bh), max(0, x):min(w, x + bw)]
-                if found and frame_number % 3 == 0:
-                    found = distinct_match((x, y, bw, bh), detector.detect(frame)) is not None
-                if found and crop.size and cv2.compareHist(reference, histogram(crop), cv2.HISTCMP_BHATTACHARYYA) < .55:
-                    controller.update(w, h, {1: Box(x, y, bw, bh)})
-                    cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 220, 0), 2)
+                elif action == "manual":
+                    identity.clear()
+                    if manual is None:
+                        controller.stop()
+                    manual = tuple(max(-1, min(1, float(command.get(axis, 0)))) for axis in ("pan", "tilt", "zoom"))
+                    manual_until = time.monotonic() + .3
+                elif action in ("preset_recall", "preset_save", "home"):
+                    identity.clear()
+                    manual = None
+                    controller.stop()
+                    if action == "home":
+                        camera.home()
+                    else:
+                        camera.preset(int(command.get("number", 1)), action == "preset_save")
+                    emit(status="Comando PTZ enviado.")
+            now = time.monotonic()
+            if manual is not None:
+                if now < manual_until:
+                    camera.move(*manual)
                 else:
                     controller.stop()
-                    tracker = reference = None
-                    emit(status="Alvo perdido ou aparência ambígua. Selecione novamente.")
+                    manual = None
+            elif identity.box is not None:
+                people = detector.detect(frame)
+                signatures = [appearance(frame, box) for box in people]
+                old_state = identity.state
+                box = identity.update(people, signatures, now, frame_number)
+                if box is not None:
+                    controller.update(w, h, box, identity.velocity, now)
+                    x, y, bw, bh = [int(v) for v in box]
+                    cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 220, 0), 2)
+                else:
+                    if controller.active or old_state == "locked":
+                        controller.stop()
+                if identity.state != old_state:
+                    messages = {
+                        "locked": "Alvo original confirmado. Rastreio retomado.",
+                        "lost": "Alvo temporariamente perdido. Câmera parada; seleção preservada.",
+                        "ambiguous": "Pessoas próximas ou semelhantes. Câmera parada; alvo original preservado.",
+                        "recovering": "A confirmar o alvo original em vários quadros…",
+                    }
+                    emit(status=messages.get(identity.state, identity.state))
             encoded, image = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
             if encoded:
                 emit(frame=base64.b64encode(image).decode("ascii"))
@@ -112,14 +143,24 @@ def main():
                 camera.stop()
             except Exception:
                 pass
+        if camera is not None and hasattr(camera, "close"):
+            try:
+                camera.close()
+            except Exception:
+                pass
         if stream is not None:
             stream.release()
 
 
-def histogram(crop):
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-    value = cv2.calcHist([hsv], [0, 1], None, [24, 24], [0, 180, 0, 256])
-    return cv2.normalize(value, value)
+def appearance(frame, box):
+    x, y, w, h = box
+    left, top = max(0, int(x+w/6)), max(0, int(y+h/6))
+    right, bottom = min(frame.shape[1], int(x+w*5/6)), min(frame.shape[0], int(y+h*2/3))
+    crop = frame[top:bottom, left:right]
+    if crop.size == 0:
+        return [0.] * 27
+    rgb = cv2.cvtColor(cv2.resize(crop, (6, 6)), cv2.COLOR_BGR2RGB)
+    return (rgb.reshape(-1, 3)[::4].reshape(-1) / 255.).tolist()
 
 
 if __name__ == "__main__":
@@ -128,3 +169,4 @@ if __name__ == "__main__":
         emit(status="Packaged AI model and runtime verified.")
     else:
         main()
+

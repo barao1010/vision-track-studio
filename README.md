@@ -20,7 +20,7 @@ Não é uma versão final validada para produção. Áudio, transmissão, plugin
 
 ## Ainda pendente
 
-Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, VISCA, zoom automático, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
+Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, recorte digital automático de fontes fixas, troca de alvo entre câmeras e joystick físico, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
 
 ## Compilar
 
@@ -36,3 +36,8 @@ Veja [Uso do PTZ](tracking/USO-PTZ.md).
 ## Licença
 
 OBS Studio é GPL-2.0-ou-posterior. As alterações nativas usam GPL-2.0-ou-posterior. O worker de rastreio combinado é distribuído sob GPLv3, com licenças Apache-2.0 preservadas; veja tracking/LICENSES.md. Preserve autoria, COPYING e licenças de terceiros. O pacote Source exporta a base modificada, submódulos e scripts correspondentes; as dependências mantêm suas próprias licenças.
+
+
+## Integração do rastreio Vision Track AI
+
+Portados para o worker nativo: seleção persistente, referência de aparência fixa, confirmação em vários quadros após perda/ambiguidade, perfis Cinema/Suave/Dinâmico e composição com margem acima do corpo. Adicionados VISCA IP, VISCA Serial, Pelco-D, setas, zoom manual, presets e posição inicial. O detector continua YOLOX, enquanto o app anterior usa COCO-SSD; a paridade de recursos não é completa. Zoom digital automático, várias câmeras e joystick físico permanecem pendentes. Protocolos e comportamento físico exigem validação nas câmeras reais.
