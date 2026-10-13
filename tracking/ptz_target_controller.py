@@ -46,6 +46,7 @@ class TargetPTZController:
     def stop(self):
         self.output.stop()
         self.running = False
+        self.last_sent = -float('inf')
         self.selected_id = None
         self.last_seen = None
         self.last_active = False
