@@ -24,11 +24,11 @@ Validação da associação de alvo em cruzamentos reais, descoberta automática
 
 ## Compilar
 
-O workflow fixa a base OBS em `f082210c177a03572cace88c168d0f32d8cde39e`, incluindo submódulos e tags. No Windows com as ferramentas oficiais do OBS:
+O workflow fixa a base OBS em `f082210c177a03572cace88c168d0f32d8cde39e`, incluindo submódulos, com checkout superficial. No Windows com as ferramentas oficiais do OBS:
 
 1. Obtenha essa revisão com submódulos.
 2. Execute `python scripts/brand_windows.py CAMINHO_OBS` e `python scripts/integrate_studio.py CAMINHO_OBS` neste repositório.
-3. Dentro da base OBS, execute `cmake --preset windows-x64` e `cmake --build --preset windows-x64 --config RelWithDebInfo`.
+3. Dentro da base OBS, execute `cmake --preset windows-x64 -DOBS_VERSION_OVERRIDE=33.0.0-rc1-vts-preview` e `cmake --build --preset windows-x64 --config RelWithDebInfo`.
 4. O workflow documenta o empacotamento do worker e do instalador.
 
 Veja [Uso do PTZ](tracking/USO-PTZ.md).
