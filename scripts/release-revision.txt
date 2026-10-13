@@ -1,0 +1,3 @@
+Vision Track Studio Windows preview
+Frozen source revision: 4066d1a76b33a257f2d0566e44dfe64462b37f95
+This branch builds the reviewed native OBS + AI PTZ preview independently of subsequent main-branch development.
