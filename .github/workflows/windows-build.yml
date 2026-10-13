@@ -1,0 +1,58 @@
+name: Windows build (experimental)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'scripts/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 360
+    steps:
+      - name: Checkout Vision Track Studio preparation
+        uses: actions/checkout@v4
+        with:
+          path: vision-track-studio
+
+      - name: Checkout OBS upstream including submodules
+        uses: actions/checkout@v4
+        with:
+          repository: obsproject/obs-studio
+          ref: master
+          path: obs-studio
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Tool versions
+        shell: pwsh
+        run: |
+          cmake --version
+          git --version
+
+      - name: Configure OBS Windows x64
+        shell: pwsh
+        working-directory: obs-studio
+        run: cmake --preset windows-x64
+
+      - name: Build OBS Windows x64
+        shell: pwsh
+        working-directory: obs-studio
+        run: cmake --build --preset windows-x64 --config RelWithDebInfo
+
+      - name: Bundle build for review
+        shell: pwsh
+        run: |
+          $dir = "obs-studio/build_x64/rundir/RelWithDebInfo"
+          if (-not (Test-Path $dir)) { throw "Build output not found: $dir" }
+          Compress-Archive -Path "$dir/*" -DestinationPath "obs-upstream-windows-x64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: obs-upstream-windows-x64-experimental
+          path: obs-upstream-windows-x64.zip
+          if-no-files-found: error
