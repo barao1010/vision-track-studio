@@ -1,4 +1,4 @@
-name: Windows build (experimental)
+name: Vision Track Studio Windows preview
 on:
   workflow_dispatch:
   push:
@@ -6,10 +6,11 @@ on:
       - '.github/workflows/windows-build.yml'
       - 'scripts/**'
       - 'tracking/**'
-
 permissions:
-  contents: read
-
+  contents: write
+concurrency:
+  group: studio-windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   tracking-tests:
     runs-on: ubuntu-latest
@@ -18,64 +19,76 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Compile Python modules
-        run: python -m compileall -q tracking
-      - name: Test PTZ tracking controller
-        working-directory: tracking
+      - run: python -m compileall -q tracking scripts
+      - working-directory: tracking
         run: python -m unittest discover -p 'test_*.py' -v
-
   windows-x64:
+    needs: tracking-tests
     runs-on: windows-2025
-    timeout-minutes: 360
+    timeout-minutes: 120
     steps:
-      - name: Checkout Vision Track Studio preparation
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           path: vision-track-studio
-
-      - name: Checkout OBS upstream including submodules
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: obsproject/obs-studio
-          ref: master
+          ref: f082210c177a03572cace88c168d0f32d8cde39e
           path: obs-studio
           submodules: recursive
           fetch-depth: 0
           fetch-tags: true
-
-      - name: Tool versions
-        shell: pwsh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply native identity and PTZ dock
         run: |
-          cmake --version
-          git --version
-
-      - name: Apply Vision Track Studio metadata branding
-        shell: pwsh
-        run: python vision-track-studio/scripts/brand_windows.py obs-studio
-
-      - name: Configure OBS Windows x64
-        shell: pwsh
+          python vision-track-studio/scripts/brand_windows.py obs-studio
+          python vision-track-studio/scripts/integrate_studio.py obs-studio
+      - name: Configure Windows
         working-directory: obs-studio
         run: cmake --preset windows-x64
-
-      - name: Build OBS Windows x64
-        shell: pwsh
+      - name: Build Windows
         working-directory: obs-studio
-        run: cmake --build --preset windows-x64 --config RelWithDebInfo
-
-      - name: Bundle build for review
+        run: cmake --build --preset windows-x64 --config RelWithDebInfo --parallel 4
+      - name: Package tracking worker
+        working-directory: vision-track-studio
+        run: |
+          python -m pip install -r tracking/requirements.txt pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-track-worker --paths tracking tracking/native_worker.py
+      - name: Bundle complete runtime, licenses and source
         shell: pwsh
         run: |
-          $candidates = Get-ChildItem -Path "obs-studio" -Filter "obs64.exe" -Recurse -File -ErrorAction SilentlyContinue
-          if (-not $candidates) { throw "obs64.exe not found - build did not produce runnable executable" }
-          $exe = $candidates | Where-Object { $_.FullName -match "rundir" } | Select-Object -First 1
-          if (-not $exe) { throw "Executable found outside rundir; cannot safely bundle its dependencies" }
-          $dir = $exe.Directory.FullName
-          Write-Host "Packaging runtime directory: $dir"
-          Compress-Archive -Path (Join-Path $dir "*") -DestinationPath "vision-track-studio-experimental-windows-x64.zip" -Force
-
+          $runtime = 'obs-studio/build_x64/rundir/RelWithDebInfo'
+          if (-not (Test-Path "$runtime/bin/64bit/vision-track-studio.exe")) { throw 'Studio executable missing' }
+          Copy-Item vision-track-studio/dist/vision-track-worker "$runtime/bin/64bit/vision-track-worker" -Recurse
+          Copy-Item obs-studio/COPYING "$runtime/COPYING"
+          Copy-Item vision-track-studio/tracking/USO-PTZ.md "$runtime/USO-PTZ.md"
+          python vision-track-studio/scripts/package_source.py Vision-Track-Studio-Source.zip obs-studio vision-track-studio
+          Compress-Archive -Path "$runtime/*" -DestinationPath Vision-Track-Studio-Windows-preview.zip -Force
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe' vision-track-studio/scripts/windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Smoke test Windows startup
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/vision-track-studio.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--version' -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Startup failed: $($process.ExitCode)" }
       - uses: actions/upload-artifact@v4
         with:
-          name: vision-track-studio-partial-branding-windows-x64-experimental
-          path: vision-track-studio-experimental-windows-x64.zip
+          name: Vision-Track-Studio-Windows-preview
+          path: |
+            Vision-Track-Studio-Windows-preview.zip
+            Vision-Track-Studio-Setup-preview.exe
+            Vision-Track-Studio-Source.zip
           if-no-files-found: error
+      - name: Publish explicitly experimental release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.1.0-preview.${{ github.run_number }}"
+          gh release create $tag Vision-Track-Studio-Windows-preview.zip Vision-Track-Studio-Setup-preview.exe Vision-Track-Studio-Source.zip --repo '${{ github.repository }}' --target '${{ github.sha }}' --prerelease --title "Vision Track Studio $tag" --notes 'Windows preview based on OBS. Includes native PTZ connection and target-selection dock. Experimental visual tracking; real camera, broadcast, audio and UI validation remain required. Corresponding GPL sources included. Not a final production release.'

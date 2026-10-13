@@ -1,6 +1,9 @@
 # Vision Track Studio — protótipo de seleção e rastreamento PTZ
 
-Este protótipo funcional **separado do OBS** usa OpenCV CSRT, vídeo RTSP e comando ONVIF ContinuousMove. Ainda não é IA de identificação de pessoas: segue o objeto selecionado por retângulo e pode perdê-lo ao mudar a cena. **Não há integração nativa do botão no OBS** até concluir o frontend Qt e teste de compilação.
+O código da versão preview inclui um painel Qt nativo com vídeo, ligação ONVIF, seleção por retângulo e botão de parar. O motor usa OpenCV CSRT com comparação de aparência. É rastreio visual experimental, não reconhecimento de identidade por IA; pessoas semelhantes podem confundir o rastreador. A compilação e a validação em hardware determinam a disponibilidade de cada release.
+
+## Painel integrado no Windows
+Abra **Painéis → Vision Track • Rastreio PTZ**. Preencha o endereço RTSP, o serviço ONVIF PTZ, o token do perfil, utilizador e senha da câmera. Clique em **Ligar / desligar câmera**. No vídeo do painel, arraste um retângulo à volta do corpo da pessoa. Use **PARAR RASTREIO** para interromper os movimentos. O rastreio para se perder o alvo ou detectar aparência ambígua; selecione novamente para retomar. A senha não é gravada num ficheiro. O vídeo RTSP deste painel é independente das fontes de cena: adicione a mesma câmera como fonte de vídeo para a transmissão.
 
 ## Requisitos
 Python 3.11+ no Windows, `pip install -r tracking/requirements.txt`. Cámara PTZ com endpoint ONVIF e perfil configurado. O PC deve alcançar a cámara via LAN.
@@ -16,9 +19,9 @@ A URL RTSP e o token ONVIF variam por fabricante. **Não copie passwords para Gi
 ## Limitações e segurança
 - O controlador usa comandos de velocidade ONVIF; requer câmera compatível e calibração de eixos. Alguns dispositivos exigem configurações de velocidade diferentes.
 - Não há detecção automática de pessoas/identidades: o rastreador CSRT segue a região visual selecionada.
-- Não tem integração com OBS, fallback de câmera fixa, suavização cinematográfica, autofocus, zoom automático ou instalador.
+- O painel controla ONVIF; não inclui VISCA, fallback de câmera fixa, autofocus nem zoom automático. O zoom permanece a zero.
 - Só opera em redes/câmaras autorizadas; teste primeiro sem ninguém perto de partes móveis e com velocidades baixas.
 - Teste da câmara real, comportamento de encerramento inesperado e watchdog PTZ ainda necessários antes de uso numa live.
 
 ## Integração futura
-Criar dock Qt/C++ OBS (seleção de pessoa) com vídeo selecionado, tracker robusto com IDs, serviço ONVIF/VISCA integrado, e comandos seguros de stop. Preservar licenças OBS e componentes terceiros.
+Reconhecimento robusto de identidade por IA, descoberta automática ONVIF, VISCA e testes com modelos reais continuam pendentes. Preservar licenças OBS e componentes terceiros.
