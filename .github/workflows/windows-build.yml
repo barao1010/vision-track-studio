@@ -5,11 +5,25 @@ on:
     paths:
       - '.github/workflows/windows-build.yml'
       - 'scripts/**'
+      - 'tracking/**'
 
 permissions:
   contents: read
 
 jobs:
+  tracking-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python modules
+        run: python -m compileall -q tracking
+      - name: Test PTZ tracking controller
+        working-directory: tracking
+        run: python -m unittest discover -p 'test_*.py' -v
+
   windows-x64:
     runs-on: windows-2025
     timeout-minutes: 360
