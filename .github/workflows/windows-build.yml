@@ -67,6 +67,8 @@ jobs:
           Copy-Item vision-track-studio/dist/vision-track-worker "$runtime/bin/64bit/vision-track-worker" -Recurse
           Copy-Item obs-studio/COPYING "$runtime/COPYING"
           Copy-Item vision-track-studio/tracking/USO-PTZ.md "$runtime/USO-PTZ.md"
+          Copy-Item vision-track-studio/tracking/LICENSES.md "$runtime/LICENSES-TRACKING.md"
+          Copy-Item vision-track-studio/tracking/models/LICENSE-GPL3.txt "$runtime/COPYING-GPL3"
           python vision-track-studio/scripts/package_source.py Vision-Track-Studio-Source.zip obs-studio vision-track-studio
           Compress-Archive -Path "$runtime/*" -DestinationPath Vision-Track-Studio-Windows-preview.zip -Force
       - name: Build installer

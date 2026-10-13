@@ -35,4 +35,4 @@ Veja [Uso do PTZ](tracking/USO-PTZ.md).
 
 ## Licença
 
-OBS Studio é GPL-2.0-ou-posterior. As alterações nativas e novos scripts desta distribuição usam GPL-2.0-ou-posterior. Preserve autoria, COPYING e licenças de terceiros. O pacote Source exporta a base modificada, submódulos e scripts correspondentes; as dependências mantêm suas próprias licenças.
+OBS Studio é GPL-2.0-ou-posterior. As alterações nativas usam GPL-2.0-ou-posterior. O worker de rastreio combinado é distribuído sob GPLv3, com licenças Apache-2.0 preservadas; veja tracking/LICENSES.md. Preserve autoria, COPYING e licenças de terceiros. O pacote Source exporta a base modificada, submódulos e scripts correspondentes; as dependências mantêm suas próprias licenças.
