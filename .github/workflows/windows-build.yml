@@ -51,9 +51,13 @@ jobs:
       - name: Bundle build for review
         shell: pwsh
         run: |
-          $dir = "obs-studio/build_x64/rundir/RelWithDebInfo"
-          if (-not (Test-Path $dir)) { throw "Build output not found: $dir" }
-          Compress-Archive -Path "$dir/*" -DestinationPath "vision-track-studio-experimental-windows-x64.zip" -Force
+          $candidates = Get-ChildItem -Path "obs-studio" -Filter "obs64.exe" -Recurse -File -ErrorAction SilentlyContinue
+          if (-not $candidates) { throw "obs64.exe not found - build did not produce runnable executable" }
+          $exe = $candidates | Where-Object { $_.FullName -match "rundir" } | Select-Object -First 1
+          if (-not $exe) { throw "Executable found outside rundir; cannot safely bundle its dependencies" }
+          $dir = $exe.Directory.FullName
+          Write-Host "Packaging runtime directory: $dir"
+          Compress-Archive -Path (Join-Path $dir "*") -DestinationPath "vision-track-studio-experimental-windows-x64.zip" -Force
 
       - uses: actions/upload-artifact@v4
         with:
