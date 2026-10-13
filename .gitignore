@@ -1,0 +1,5 @@
+upstream-obs/
+build_*/
+.vs/
+*.exe
+*.msi
