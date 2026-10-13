@@ -8,6 +8,7 @@ import threading
 import time
 
 import cv2
+import numpy as np
 from ptz_companion import OnvifPTZ, tracker_factory
 from ptz_target_controller import Box, TargetPTZController
 from ai_detector import PersonDetector, distinct_match
@@ -122,4 +123,8 @@ def histogram(crop):
 
 
 if __name__ == "__main__":
-    main()
+    if "--self-test" in sys.argv:
+        assert PersonDetector().detect(np.zeros((360, 640, 3), dtype=np.uint8)) == []
+        emit(status="Packaged AI model and runtime verified.")
+    else:
+        main()
