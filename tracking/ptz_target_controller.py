@@ -65,10 +65,16 @@ class TargetPTZController:
             raise ValueError("Frame size must be positive")
         box = detections.get(self.selected_id)
         if box is None:
-            if self.last_seen is not None and now - self.last_seen >= self.lost_after:
+            if self.last_seen is not None and now - self.last_seen >= self.lost_after and self.last_active:
                 self.output.stop()
                 self.last_active = False
                 self.previous = (0.0, 0.0)
+                self.last_sent = -float('inf')
+            return
+        if box.w <= 0 or box.h <= 0:
+            if self.last_active:
+                self.output.stop()
+                self.last_active = False
             return
         self.last_seen = now
         cx, cy = box.center()
