@@ -7,6 +7,7 @@ Safety: no movement until an explicit selection; stop on target loss.
 from dataclasses import dataclass
 from typing import Protocol, Optional
 import time
+import math
 
 @dataclass(frozen=True)
 class Box:
@@ -72,16 +73,25 @@ class TargetPTZController:
                 self.previous = (0.0, 0.0)
                 self.last_sent = -float('inf')
             return
-        if box.w <= 0 or box.h <= 0:
+        if not all(math.isfinite(value) for value in (box.x, box.y, box.w, box.h)) or box.w <= 0 or box.h <= 0:
             if self.last_active:
                 self.output.stop()
                 self.last_active = False
+            self.previous = (0.0, 0.0)
+            self.last_sent = -float('inf')
             return
         self.last_seen = now
         cx, cy = box.center()
         pan_error = (cx / frame_w - 0.5) * 2
         tilt_error = (cy / frame_h - 0.5) * 2
         desired = (self._axis(pan_error), self._axis(tilt_error))
+        if desired == (0.0, 0.0):
+            if self.last_active:
+                self.output.stop()
+            self.last_active = False
+            self.previous = (0.0, 0.0)
+            self.last_sent = -float('inf')
+            return
         pan = (1 - self.smoothing) * self.previous[0] + self.smoothing * desired[0]
         tilt = (1 - self.smoothing) * self.previous[1] + self.smoothing * desired[1]
         if now - self.last_sent >= self.min_interval:
@@ -90,3 +100,4 @@ class TargetPTZController:
             self.previous = (pan, tilt)
             self.last_sent = now
             self.last_active = True
+

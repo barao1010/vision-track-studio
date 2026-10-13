@@ -50,5 +50,29 @@ class TargetControllerTests(unittest.TestCase):
         controller.update(100, 100, {2: Box(5, 45, 15, 15)}, now=1.01)
         self.assertLess(ptz.commands[-1][1], 0)
 
+    def test_centered_target_stops_without_residual_motion(self):
+        ptz = MockPTZ()
+        controller = TargetPTZController(ptz)
+        controller.select(1)
+        controller.update(100, 100, {1: Box(80, 40, 20, 20)}, now=1)
+        controller.update(100, 100, {1: Box(40, 40, 20, 20)}, now=1.01)
+        self.assertEqual(("stop",), ptz.commands[-1])
+        count = len(ptz.commands)
+        controller.update(100, 100, {1: Box(40, 40, 20, 20)}, now=2)
+        self.assertEqual(count, len(ptz.commands))
+
+    def test_invalid_box_resets_motion_before_direction_change(self):
+        for invalid in (Box(10, 10, 0, 20), Box(float('nan'), 10, 20, 20)):
+            with self.subTest(invalid=invalid):
+                ptz = MockPTZ()
+                controller = TargetPTZController(ptz)
+                controller.select(1)
+                controller.update(100, 100, {1: Box(80, 40, 20, 20)}, now=1)
+                controller.update(100, 100, {1: invalid}, now=1.01)
+                self.assertEqual(("stop",), ptz.commands[-1])
+                controller.update(100, 100, {1: Box(0, 40, 20, 20)}, now=1.02)
+                self.assertLess(ptz.commands[-1][1], 0)
+
 if __name__ == "__main__":
     unittest.main()
+
