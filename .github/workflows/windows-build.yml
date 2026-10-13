@@ -55,7 +55,8 @@ jobs:
         working-directory: vision-track-studio
         run: |
           python -m pip install -r tracking/requirements.txt pyinstaller==6.16.0
-          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-track-worker --paths tracking tracking/native_worker.py
+          python scripts/prepare_tracking_model.py
+          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-track-worker --paths tracking --add-data "tracking/models;models" tracking/native_worker.py
       - name: Bundle complete runtime, licenses and source
         shell: pwsh
         run: |
