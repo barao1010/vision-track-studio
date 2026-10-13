@@ -33,8 +33,9 @@ def main():
     try:
         config = commands.get(timeout=15)
         camera = OnvifPTZ(config["ptz"], config["profile"], os.environ["VTS_PTZ_USER"],
-                          os.environ["VTS_PTZ_PASSWORD"])
-        controller = TargetPTZController(camera)
+                          os.environ["VTS_PTZ_PASSWORD"], invert_pan=config.get("invertPan", False),
+                          invert_tilt=config.get("invertTilt", True))
+        controller = TargetPTZController(camera, max_speed=max(.05, min(.5, float(config.get("speed", .15)))))
         stream = cv2.VideoCapture(config["video"], cv2.CAP_FFMPEG,
                                  [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
                                   cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000])

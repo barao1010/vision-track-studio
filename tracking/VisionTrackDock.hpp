@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 #include <QApplication>
+#include <QCheckBox>
+#include <QDoubleSpinBox>
 #include <QDockWidget>
 #include <QFormLayout>
 #include <QJsonArray>
@@ -60,6 +62,8 @@ protected:
 class VisionTrackDock : public QDockWidget {
     QProcess worker;
     QLineEdit *video, *ptz, *profile, *user, *password;
+    QCheckBox *invertPan, *invertTilt;
+    QDoubleSpinBox *speed;
     QLabel *status;
     VTPreview *preview;
     QPushButton *connectButton;
@@ -92,6 +96,12 @@ public:
         layout->addRow(QStringLiteral("Token do perfil"), profile);
         layout->addRow(QStringLiteral("Utilizador"), user);
         layout->addRow(QStringLiteral("Senha"), password);
+        invertPan = new QCheckBox(QStringLiteral("Inverter eixo horizontal"), body);
+        invertTilt = new QCheckBox(QStringLiteral("Inverter eixo vertical (ONVIF)"), body);
+        invertTilt->setChecked(true);
+        layout->addRow(invertPan); layout->addRow(invertTilt);
+        speed = new QDoubleSpinBox(body); speed->setRange(.05, .5); speed->setSingleStep(.05); speed->setValue(.15);
+        layout->addRow(QStringLiteral("Velocidade máxima"), speed);
         connectButton = new QPushButton(QStringLiteral("Ligar / desligar câmera"), body);
         layout->addRow(connectButton);
         preview = new VTPreview(body); layout->addRow(preview);
@@ -119,7 +129,9 @@ public:
             worker.start();
         });
         QObject::connect(&worker, &QProcess::started, this, [this]() {
-            send(QJsonObject{{"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()}});
+            send(QJsonObject{{"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
+                             {"invertPan", invertPan->isChecked()}, {"invertTilt", invertTilt->isChecked()},
+                             {"speed", speed->value()}});
             watchdog.start(15000);
         });
         QObject::connect(&worker, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
