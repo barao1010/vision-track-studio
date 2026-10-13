@@ -18,6 +18,12 @@
 #include <QPushButton>
 #include <QTimer>
 #include <functional>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 class VTPreview : public QLabel {
     QPoint start;
@@ -110,6 +116,11 @@ public:
         status->setWordWrap(true); layout->addRow(status);
         setWidget(body);
         worker.setProcessChannelMode(QProcess::SeparateChannels);
+#ifdef Q_OS_WIN
+        worker.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) {
+            args->flags |= CREATE_NO_WINDOW;
+        });
+#endif
         watchdog.setInterval(4000);
         watchdog.setSingleShot(true);
         QObject::connect(&watchdog, &QTimer::timeout, this, [this]() {
