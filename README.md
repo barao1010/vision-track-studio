@@ -14,13 +14,13 @@ Não é uma versão final validada para produção. Áudio, transmissão, plugin
 - Painel nativo com vídeo RTSP, serviço ONVIF, credenciais e seleção do alvo por retângulo.
 - Botão de parar; interrupção do rastreio quando o alvo é perdido ou a aparência diverge.
 - Detector de pessoas por IA (YOLOX/OpenCV Zoo), CSRT e comparação de aparência. A seleção exige uma pessoa distinta; a associação interrompe movimentos em casos ambíguos. Não faz identificação biométrica.
-- Identidade no título, metadados Windows, executável e bandeja; configurações isoladas das do OBS.
+- Identidade no título, metadados Windows, executável, bandeja, ícones, instalador e tela Sobre; configurações isoladas das do OBS.
 - Instalador Windows, pacote portable e código-fonte correspondente na pré-release.
 - Canal de atualização manual nas Releases. Não instala atualizações oficiais do OBS por cima desta distribuição.
 
 ## Ainda pendente
 
-Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, VISCA, zoom automático, identidade visual completa (ícones e algumas telas) e validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
+Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, VISCA, zoom automático, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
 
 ## Compilar
 

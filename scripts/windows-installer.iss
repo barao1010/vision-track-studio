@@ -13,6 +13,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 LicenseFile=..\..\obs-studio\COPYING
+SetupIconFile=..\..\obs-studio\frontend\cmake\windows\obs-studio.ico
 [Files]
 Source: "..\..\obs-studio\build_x64\rundir\RelWithDebInfo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]

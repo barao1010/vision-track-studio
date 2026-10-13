@@ -31,6 +31,23 @@ replace("frontend/widgets/OBSBasic_Updater.cpp", 'void OBSBasic::CheckForUpdates
 replace("frontend/widgets/OBSBasic_MainControls.cpp", 'void OBSBasic::on_actionRepair_triggered()\n{',
         'void OBSBasic::on_actionRepair_triggered()\n{\n\tCheckForUpdates(true);\n\treturn;\n')
 replace("frontend/widgets/OBSBasic_SysTray.cpp", '"OBS Studio"', '"Vision Track Studio"')
+replace("frontend/forms/OBSAbout.ui", '<string notr="true">OBS Studio</string>',
+        '<string notr="true">Vision Track Studio</string>')
+for file in (root / "frontend/data/locale").glob("*.ini"):
+    text = file.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.startswith("About.Info="):
+            descriptions = {
+                "pt-PT": "Vision Track Studio é uma distribuição independente baseada no OBS Studio, com rastreio PTZ por IA.",
+                "pt-BR": "Vision Track Studio é uma distribuição independente baseada no OBS Studio, com rastreamento PTZ por IA.",
+                "es-ES": "Vision Track Studio es una distribución independiente basada en OBS Studio, con seguimiento PTZ mediante IA.",
+            }
+            description = descriptions.get(file.stem, "Vision Track Studio is an independent distribution based on OBS Studio, with AI PTZ tracking.")
+            lines[index] = f'About.Info="{description}"\n'
+        else:
+            lines[index] = line.replace("OBS Studio", "Vision Track Studio")
+    file.write_text("".join(lines), encoding="utf-8")
 # Keep OBS plugin/data identifiers intact; only isolate configuration paths.
 for file in (root / "frontend").rglob("*.cpp"):
     text = file.read_text(encoding="utf-8")
