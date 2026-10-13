@@ -1,0 +1,1 @@
+opencv-contrib-python>=4.9,<5\nrequests>=2.31,<3\n
