@@ -1,30 +1,38 @@
 # Vision Track Studio
 
-Projeto independente para Windows, planejado como distribuição modificada do [OBS Studio](https://github.com/obsproject/obs-studio), com a mesma interface e funcionalidades, mas identidade Vision Track Studio.
+Distribuição Windows baseada no código original do OBS Studio, com painel Qt de rastreio PTZ. Projeto independente, sem patrocínio do OBS Project.
 
-## Estado
+## Estado verificável
 
-**Bootstrap iniciado; não é ainda um aplicativo compilado.** Este repositório contém a preparação, não contém ainda o código-fonte completo nem um instalador.
+O código do painel nativo, o worker de rastreio, as alterações de identidade e o pipeline de instalador estão neste repositório. A compilação publica uma **pré-release experimental** apenas depois dos testes do controlador, build Windows e teste de arranque. Consulte [Actions](https://github.com/barao1010/vision-track-studio/actions) e [Releases](https://github.com/barao1010/vision-track-studio/releases) para saber se há binários concluídos.
 
-## Começar no Windows
+Não é uma versão final validada para produção. Áudio, transmissão, plugins, UI e PTZ físico precisam de testes no Windows e com câmeras reais.
 
-1. Instale Git for Windows, Visual Studio com ferramentas C++, Windows SDK e CMake conforme [instruções oficiais de build do OBS](https://github.com/obsproject/obs-studio/wiki/Build-Instructions-For-Windows).
-2. Execute em PowerShell: `powershell -ExecutionPolicy Bypass -File .\scripts\obter-obs.ps1`.
-3. O script descarrega o OBS com submódulos e prepara a pasta `upstream-obs`.
-4. Depois, com dependências instaladas, execute `cmake --preset windows-x64` e `cmake --build --preset windows-x64` dentro dessa pasta.
+## Implementado no código
 
-**Atenção:** esse build inicial é o OBS *sem alterações*. Só distribuir sob o nome Vision Track Studio após modificar corretamente marcas, nomes internos, instalador, diretórios, atalhos e verificar compatibilidade de plugins, mantendo arquivos de licença e avisos de copyright.
+- Base OBS com cenas, fontes, mixer, gravação, transmissão e browser source.
+- Painel nativo com vídeo RTSP, serviço ONVIF, credenciais e seleção do alvo por retângulo.
+- Botão de parar; interrupção do rastreio quando o alvo é perdido ou a aparência diverge.
+- OpenCV CSRT e comparação de aparência; **não é reconhecimento de identidade por IA**.
+- Identidade no título, metadados Windows, executável e bandeja; configurações isoladas das do OBS.
+- Instalador Windows, pacote portable e código-fonte correspondente na pré-release.
+- Canal de atualização manual nas Releases. Não instala atualizações oficiais do OBS por cima desta distribuição.
 
-## Plano de trabalho
+## Ainda pendente
 
-- [x] Repositório separado criado
-- [x] Documentação e script inicial de obtenção da base oficial
-- [ ] Incorporar o código-fonte completo do OBS em fork/importação versionada
-- [ ] Aplicar identidade Vision Track Studio ao programa inteiro
-- [ ] Isolar configurações e atualizar instalador do Windows
-- [ ] Compilar e testar áudio, vídeo, cenas, browsers, plugins e transmissão
-- [ ] Publicar release e código-fonte correspondente sob os termos GPL
+Reconhecimento de pessoas por IA e associação robusta em cruzamentos, descoberta automática ONVIF, VISCA, zoom automático, identidade visual completa (ícones e algumas telas) e validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
 
-## Licença e atribuições
+## Compilar
 
-OBS Studio é software livre licenciado sob GPL-2.0-ou-posterior. Este repositório de preparação não é patrocinado pelo OBS Project e não altera sua marca oficial. Não retirar avisos de autoria/licença e preservar as licenças dos componentes de terceiros. Consulte https://github.com/obsproject/obs-studio/blob/master/COPYING .
+O workflow fixa a base OBS em `f082210c177a03572cace88c168d0f32d8cde39e`, incluindo submódulos e tags. No Windows com as ferramentas oficiais do OBS:
+
+1. Obtenha essa revisão com submódulos.
+2. Execute `python scripts/brand_windows.py CAMINHO_OBS` e `python scripts/integrate_studio.py CAMINHO_OBS` neste repositório.
+3. Dentro da base OBS, execute `cmake --preset windows-x64` e `cmake --build --preset windows-x64 --config RelWithDebInfo`.
+4. O workflow documenta o empacotamento do worker e do instalador.
+
+Veja [Uso do PTZ](tracking/USO-PTZ.md).
+
+## Licença
+
+OBS Studio é GPL-2.0-ou-posterior. As alterações nativas e novos scripts desta distribuição usam GPL-2.0-ou-posterior. Preserve autoria, COPYING e licenças de terceiros. O pacote Source exporta a base modificada, submódulos e scripts correspondentes; as dependências mantêm suas próprias licenças.
