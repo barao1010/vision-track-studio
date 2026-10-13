@@ -40,7 +40,8 @@ jobs:
           ref: master
           path: obs-studio
           submodules: recursive
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Tool versions
         shell: pwsh
