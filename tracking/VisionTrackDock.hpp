@@ -295,6 +295,27 @@ public:
         preview->selected = [this](QJsonArray box) { send(QJsonObject{{"action", "select"}, {"box", box}}); };
         QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { shutdown(); });
     }
+    void selectFixedSource(const QString &name) {
+        // Selection does not start tracking automatically or change OBS scenes.
+        if (worker.state() != QProcess::NotRunning)
+            shutdown();
+        cameraMode->setCurrentIndex(cameraMode->findData(QStringLiteral("fixed")));
+        obsSource->clear();
+        obsSource->addItem(QStringLiteral("Selecione a fonte do OBS"), QString());
+        obs_enum_sources([](void *ctx, obs_source_t *source) -> bool {
+            if (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO) {
+                auto *selector = static_cast<QComboBox *>(ctx);
+                const QString sourceName = QString::fromUtf8(obs_source_get_name(source));
+                selector->addItem(sourceName, sourceName);
+            }
+            return true;
+        }, obsSource);
+        const int index = obsSource->findData(name);
+        if (index >= 0)
+            obsSource->setCurrentIndex(index);
+        status->setText(QStringLiteral("Fonte selecionada. Configure o endereço RTSP ou device:0 e ligue a câmera."));
+    }
+
     ~VisionTrackDock() override { shutdown(); }
 };
 
