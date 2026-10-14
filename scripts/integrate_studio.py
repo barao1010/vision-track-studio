@@ -16,7 +16,8 @@ def replace(path, old, new):
 
 shutil.copy2(project / "tracking/FixedCameraSceneZoom.hpp", root / "frontend/widgets/FixedCameraSceneZoom.hpp")
 shutil.copy2(project / "tracking/VisionTrackDock.hpp", root / "frontend/widgets/VisionTrackDock.hpp")
-replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"')
+shutil.copy2(project / "tracking/VisionCameraSourcesDock.hpp", root / "frontend/widgets/VisionCameraSourcesDock.hpp")
+replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"\n#include "VisionCameraSourcesDock.hpp"')
 # Set up the user's chosen OBS-style but independently arranged workspace.
 # No OBS settings dialog, scene, or saved user configuration is rewritten.
 replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',
@@ -26,9 +27,12 @@ replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',
         '\tsplitDockWidget(ui->mixerDock, controlsDock, Qt::Vertical);\n'
         '\tsplitDockWidget(controlsDock, ui->transitionsDock, Qt::Vertical);\n'
         '\tauto *visionTrackDock = new VisionTrackDock(this);\n'
-        '\taddDockWidget(Qt::BottomDockWidgetArea, visionTrackDock);\n'
+        '\tauto *visionCameraDock = new VisionCameraSourcesDock(visionTrackDock, this);\n'
+        '\taddDockWidget(Qt::BottomDockWidgetArea, visionCameraDock);\n'
+        '\tsplitDockWidget(visionCameraDock, visionTrackDock, Qt::Vertical);\n'
         '\tui->mixerDock->setWindowTitle(QStringLiteral("Mixer de Áudio"));\n'
         '\tui->transitionsDock->setWindowTitle(QStringLiteral("Transição"));\n'
+        '\tui->menuDocks->addAction(visionCameraDock->toggleViewAction());\n'
         '\tui->menuDocks->addAction(visionTrackDock->toggleViewAction());\n'
         '\tresizeDocks({ui->scenesDock, ui->sourcesDock}, {420, 420}, Qt::Vertical);\n'
         '\tresizeDocks({ui->mixerDock, controlsDock, ui->transitionsDock}, {390, 250, 170}, Qt::Vertical);\n'
