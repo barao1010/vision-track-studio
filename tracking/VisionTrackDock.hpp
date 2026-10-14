@@ -105,6 +105,15 @@ public:
         setObjectName(QStringLiteral("visionTrackDock"));
         auto *body = new QWidget(this);
         auto *layout = new QFormLayout(body);
+        layout->setContentsMargins(6, 4, 6, 4);
+        layout->setSpacing(6);
+        auto *advanced = new QWidget(body);
+        auto *advancedLayout = new QFormLayout(advanced);
+        advanced->setVisible(false);
+        auto *showAdvanced = new QPushButton(QStringLiteral("Ligação e controlos PTZ / opções avançadas ▾"), body);
+        QObject::connect(showAdvanced, &QPushButton::clicked, this, [advanced]() {
+            advanced->setVisible(!advanced->isVisible());
+        });
         cameraMode = new QComboBox(body);
         cameraMode->addItem(QStringLiteral("Câmera PTZ • movimento físico"), QStringLiteral("ptz"));
         cameraMode->addItem(QStringLiteral("Câmera fixa • zoom digital"), QStringLiteral("fixed"));
@@ -146,17 +155,17 @@ public:
         protocol->addItem(QStringLiteral("VISCA IP (UDP)"), QStringLiteral("visca_ip"));
         protocol->addItem(QStringLiteral("VISCA Serial"), QStringLiteral("visca_serial"));
         protocol->addItem(QStringLiteral("Pelco-D"), QStringLiteral("pelco_d"));
-        layout->addRow(QStringLiteral("Protocolo PTZ"), protocol);
+        advancedLayout->addRow(QStringLiteral("Protocolo PTZ"), protocol);
         host = new QLineEdit(body); host->setPlaceholderText(QStringLiteral("192.168.1.100"));
         port = new QSpinBox(body); port->setRange(1, 65535); port->setValue(52381);
         serialPort = new QLineEdit(body); serialPort->setPlaceholderText(QStringLiteral("COM3"));
         baud = new QSpinBox(body); baud->setRange(1200, 115200); baud->setValue(9600);
         address = new QSpinBox(body); address->setRange(1, 255); address->setValue(1);
-        layout->addRow(QStringLiteral("IP / host (VISCA / Pelco)"), host);
-        layout->addRow(QStringLiteral("Porta de rede"), port);
-        layout->addRow(QStringLiteral("Porta serial (COM)"), serialPort);
-        layout->addRow(QStringLiteral("Baud rate"), baud);
-        layout->addRow(QStringLiteral("Endereço Pelco-D"), address);
+        advancedLayout->addRow(QStringLiteral("IP / host (VISCA / Pelco)"), host);
+        advancedLayout->addRow(QStringLiteral("Porta de rede"), port);
+        advancedLayout->addRow(QStringLiteral("Porta serial (COM)"), serialPort);
+        advancedLayout->addRow(QStringLiteral("Baud rate"), baud);
+        advancedLayout->addRow(QStringLiteral("Endereço Pelco-D"), address);
         QObject::connect(protocol, &QComboBox::currentIndexChanged, this, [this]() {
             const auto kind = protocol->currentData().toString();
             port->setValue(kind == "visca_ip" ? 52381 : kind == "pelco_d" ? 4001 : 80);
@@ -169,14 +178,14 @@ public:
         user = new QLineEdit(body);
         password = new QLineEdit(body); password->setEchoMode(QLineEdit::Password);
         layout->addRow(QStringLiteral("Vídeo RTSP ou dispositivo"), video);
-        layout->addRow(QStringLiteral("Serviço ONVIF PTZ"), ptz);
-        layout->addRow(QStringLiteral("Token do perfil"), profile);
-        layout->addRow(QStringLiteral("Utilizador"), user);
-        layout->addRow(QStringLiteral("Senha"), password);
+        advancedLayout->addRow(QStringLiteral("Serviço ONVIF PTZ"), ptz);
+        advancedLayout->addRow(QStringLiteral("Token do perfil"), profile);
+        advancedLayout->addRow(QStringLiteral("Utilizador"), user);
+        advancedLayout->addRow(QStringLiteral("Senha"), password);
         invertPan = new QCheckBox(QStringLiteral("Inverter eixo horizontal"), body);
         invertTilt = new QCheckBox(QStringLiteral("Inverter eixo vertical (ONVIF)"), body);
         invertTilt->setChecked(true);
-        layout->addRow(invertPan); layout->addRow(invertTilt);
+        advancedLayout->addRow(invertPan); advancedLayout->addRow(invertTilt);
         speed = new QDoubleSpinBox(body); speed->setRange(.05, .6); speed->setSingleStep(.05); speed->setValue(.32);
         layout->addRow(QStringLiteral("Velocidade máxima"), speed);
         motionPreset = new QComboBox(body);
@@ -212,18 +221,20 @@ public:
         addManual(QStringLiteral("↓"), 2, 1, 0, 1, 0);
         addManual(QStringLiteral("Zoom −"), 3, 0, 0, 0, -1);
         addManual(QStringLiteral("Zoom +"), 3, 2, 0, 0, 1);
-        layout->addRow(QStringLiteral("Controlo manual"), manualBody);
+        advancedLayout->addRow(QStringLiteral("Controlo manual"), manualBody);
         presetNumber = new QSpinBox(body); presetNumber->setRange(1, 127); presetNumber->setValue(1);
-        layout->addRow(QStringLiteral("Número do preset"), presetNumber);
+        advancedLayout->addRow(QStringLiteral("Número do preset"), presetNumber);
         for (const auto &entry : {std::pair<const char *, const char *>{"Ir ao preset", "preset_recall"},
                                  {"Guardar preset", "preset_save"}, {"Posição inicial", "home"}}) {
             auto *button = new QPushButton(QString::fromUtf8(entry.first), body);
             const QString action = QString::fromUtf8(entry.second);
-            layout->addRow(button);
+            advancedLayout->addRow(button);
             QObject::connect(button, &QPushButton::clicked, this, [this, action]() {
                 manualTimer.stop(); send(QJsonObject{{"action", action}, {"number", presetNumber->value()}});
             });
         }
+        layout->addRow(showAdvanced);
+        layout->addRow(advanced);
         auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setWidget(body);
         setWidget(scroll);
         worker.setProcessChannelMode(QProcess::SeparateChannels);
