@@ -88,5 +88,16 @@ for file in (root / "frontend").rglob("*.cpp"):
         file.write_text(updated, encoding="utf-8")
 replace("frontend/CMakeLists.txt", 'OUTPUT_NAME "$<IF:$<PLATFORM_ID:Windows>,obs64,obs>"',
         'OUTPUT_NAME "$<IF:$<PLATFORM_ID:Windows>,vision-track-studio,obs>"')
+
+# Modified 2026-10-14: the Reset UI command should restore Vision's layout
+# instead of resizing right-side docks as though they lived at the bottom.
+replace("frontend/widgets/OBSBasic_Docks.cpp",
+        'QList<QDockWidget *> bottomDocks{ui->mixerDock, ui->transitionsDock, controlsDock};',
+        'QList<QDockWidget *> bottomDocks{ui->mixerDock, ui->transitionsDock, controlsDock};'
+        ' // Vision Track Studio right-side control stack, 2026-10-14')
+replace("frontend/widgets/OBSBasic_Docks.cpp",
+        'resizeDocks(bottomDocks, {cx * 45 / 100, cx * 14 / 100, cx * 16 / 100}, Qt::Horizontal);',
+        'resizeDocks(bottomDocks, {cx * 38 / 100, cx * 22 / 100, cx * 20 / 100}, Qt::Vertical);'
+        ' // Vision Track Studio 2026-10-14')
 replace("frontend/widgets/OBSBasic.cpp", "\tif (!dockStateStr) {\n\t\ton_resetDocks_triggered(true);", "\tif (!dockStateStr) {\n\t\ton_resetDocks_triggered(true);\n\t\t// Vision Track Studio 2026-10-14: first-launch studio preview/program.\n\t\tif (!IsPreviewProgramMode()) SetPreviewProgramMode(true);")
 print("OBS-style workspace, fixed-camera zoom dock and isolated identity applied.")
