@@ -1,6 +1,11 @@
 name: Vision Track Studio Windows preview
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'scripts/**'
+      - 'tracking/**'
   push:
     paths:
       - '.github/workflows/windows-build.yml'
@@ -92,6 +97,7 @@ jobs:
             Vision-Track-Studio-Source.zip
           if-no-files-found: error
       - name: Publish explicitly experimental release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

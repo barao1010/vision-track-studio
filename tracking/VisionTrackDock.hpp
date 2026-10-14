@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include "FixedCameraSceneZoom.hpp"
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -73,7 +74,8 @@ protected:
 class VisionTrackDock : public QDockWidget {
     QProcess worker;
     QLineEdit *video, *ptz, *profile, *user, *password, *host, *serialPort;
-    QComboBox *protocol, *motionPreset;
+    QComboBox *protocol, *motionPreset, *cameraMode, *obsSource;
+    FixedCameraSceneZoom sceneZoom;
     QSpinBox *port, *baud, *address, *presetNumber;
     QTimer manualTimer;
     QJsonObject manualCommand;
@@ -89,6 +91,7 @@ class VisionTrackDock : public QDockWidget {
             worker.write(QJsonDocument(message).toJson(QJsonDocument::Compact) + '\n');
     }
     void shutdown() {
+        sceneZoom.restore();
         watchdog.stop();
         manualTimer.stop();
         send(QJsonObject{{"action", "quit"}});
@@ -98,46 +101,91 @@ class VisionTrackDock : public QDockWidget {
         }
     }
 public:
-    explicit VisionTrackDock(QMainWindow *main) : QDockWidget(QStringLiteral("Vision Track • Rastreio PTZ"), main) {
+    explicit VisionTrackDock(QMainWindow *main) : QDockWidget(QStringLiteral("Rastreamento IA"), main), sceneZoom(static_cast<OBSBasic *>(main)) {
         setObjectName(QStringLiteral("visionTrackDock"));
         auto *body = new QWidget(this);
         auto *layout = new QFormLayout(body);
+        layout->setContentsMargins(6, 4, 6, 4);
+        layout->setSpacing(6);
+        auto *advanced = new QWidget(body);
+        auto *advancedLayout = new QFormLayout(advanced);
+        advanced->setVisible(false);
+        auto *showAdvanced = new QPushButton(QStringLiteral("Ligação e controlos PTZ / opções avançadas ▾"), body);
+        QObject::connect(showAdvanced, &QPushButton::clicked, this, [advanced]() {
+            advanced->setVisible(!advanced->isVisible());
+        });
+        cameraMode = new QComboBox(body);
+        cameraMode->addItem(QStringLiteral("Câmera PTZ • movimento físico"), QStringLiteral("ptz"));
+        cameraMode->addItem(QStringLiteral("Câmera fixa • zoom digital"), QStringLiteral("fixed"));
+        layout->addRow(QStringLiteral("Modo de câmera"), cameraMode);
+        obsSource = new QComboBox(body);
+        auto *refreshSources = new QPushButton(QStringLiteral("Atualizar fontes"), body);
+        auto fillSources = [this]() {
+            const QString previous = obsSource->currentData().toString();
+            obsSource->clear();
+            obsSource->addItem(QStringLiteral("Selecione a fonte do OBS"), QString());
+            obs_enum_sources([](void *context, obs_source_t *source) -> bool {
+                if (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO) {
+                    auto *selector = static_cast<QComboBox *>(context);
+                    const QString name = QString::fromUtf8(obs_source_get_name(source));
+                    selector->addItem(name, name);
+                }
+                return true;
+            }, obsSource);
+            const int index = obsSource->findData(previous);
+            if (index >= 0)
+                obsSource->setCurrentIndex(index);
+        };
+        layout->addRow(QStringLiteral("Fonte da cena (zoom digital)"), obsSource);
+        layout->addRow(refreshSources);
+        QObject::connect(refreshSources, &QPushButton::clicked, this, fillSources);
+        QObject::connect(obsSource, &QComboBox::currentIndexChanged, this, [this]() {
+            sceneZoom.setSource(obsSource->currentData().toString());
+        });
+        QObject::connect(cameraMode, &QComboBox::currentIndexChanged, this, [this]() {
+            sceneZoom.restore();
+            const bool fixed = cameraMode->currentData().toString() == QStringLiteral("fixed");
+            status->setText(fixed
+                ? QStringLiteral("Zoom digital: selecione a mesma fonte usada na cena do OBS.")
+                : QStringLiteral("PTZ físico: configure protocolo e endereço."));
+        });
+        fillSources();
         protocol = new QComboBox(body);
         protocol->addItem(QStringLiteral("ONVIF"), QStringLiteral("onvif"));
         protocol->addItem(QStringLiteral("VISCA IP (UDP)"), QStringLiteral("visca_ip"));
         protocol->addItem(QStringLiteral("VISCA Serial"), QStringLiteral("visca_serial"));
         protocol->addItem(QStringLiteral("Pelco-D"), QStringLiteral("pelco_d"));
-        layout->addRow(QStringLiteral("Protocolo PTZ"), protocol);
+        advancedLayout->addRow(QStringLiteral("Protocolo PTZ"), protocol);
         host = new QLineEdit(body); host->setPlaceholderText(QStringLiteral("192.168.1.100"));
         port = new QSpinBox(body); port->setRange(1, 65535); port->setValue(52381);
         serialPort = new QLineEdit(body); serialPort->setPlaceholderText(QStringLiteral("COM3"));
         baud = new QSpinBox(body); baud->setRange(1200, 115200); baud->setValue(9600);
         address = new QSpinBox(body); address->setRange(1, 255); address->setValue(1);
-        layout->addRow(QStringLiteral("IP / host (VISCA / Pelco)"), host);
-        layout->addRow(QStringLiteral("Porta de rede"), port);
-        layout->addRow(QStringLiteral("Porta serial (COM)"), serialPort);
-        layout->addRow(QStringLiteral("Baud rate"), baud);
-        layout->addRow(QStringLiteral("Endereço Pelco-D"), address);
+        advancedLayout->addRow(QStringLiteral("IP / host (VISCA / Pelco)"), host);
+        advancedLayout->addRow(QStringLiteral("Porta de rede"), port);
+        advancedLayout->addRow(QStringLiteral("Porta serial (COM)"), serialPort);
+        advancedLayout->addRow(QStringLiteral("Baud rate"), baud);
+        advancedLayout->addRow(QStringLiteral("Endereço Pelco-D"), address);
         QObject::connect(protocol, &QComboBox::currentIndexChanged, this, [this]() {
             const auto kind = protocol->currentData().toString();
             port->setValue(kind == "visca_ip" ? 52381 : kind == "pelco_d" ? 4001 : 80);
             baud->setValue(kind == "pelco_d" ? 2400 : 9600);
             invertTilt->setChecked(kind == "onvif");
         });
-        video = new QLineEdit(body); video->setPlaceholderText(QStringLiteral("rtsp://câmera/stream"));
+        video = new QLineEdit(body); video->setPlaceholderText(QStringLiteral("rtsp://câmera/stream ou device:0 (USB/HDMI)"));
         ptz = new QLineEdit(body); ptz->setPlaceholderText(QStringLiteral("http://câmera/onvif/ptz_service"));
         profile = new QLineEdit(body);
         user = new QLineEdit(body);
         password = new QLineEdit(body); password->setEchoMode(QLineEdit::Password);
-        layout->addRow(QStringLiteral("Vídeo RTSP"), video);
-        layout->addRow(QStringLiteral("Serviço ONVIF PTZ"), ptz);
-        layout->addRow(QStringLiteral("Token do perfil"), profile);
-        layout->addRow(QStringLiteral("Utilizador"), user);
-        layout->addRow(QStringLiteral("Senha"), password);
+        layout->addRow(QStringLiteral("Vídeo RTSP ou dispositivo"), video);
+        advancedLayout->addRow(QStringLiteral("Serviço ONVIF PTZ"), ptz);
+        advancedLayout->addRow(QStringLiteral("Token do perfil"), profile);
+        advancedLayout->addRow(QStringLiteral("Utilizador"), user);
+        advancedLayout->addRow(QStringLiteral("Senha"), password);
         invertPan = new QCheckBox(QStringLiteral("Inverter eixo horizontal"), body);
         invertTilt = new QCheckBox(QStringLiteral("Inverter eixo vertical (ONVIF)"), body);
         invertTilt->setChecked(true);
-        layout->addRow(invertPan); layout->addRow(invertTilt);
+        advancedLayout->addRow(invertPan); advancedLayout->addRow(invertTilt);
         speed = new QDoubleSpinBox(body); speed->setRange(.05, .6); speed->setSingleStep(.05); speed->setValue(.32);
         layout->addRow(QStringLiteral("Velocidade máxima"), speed);
         motionPreset = new QComboBox(body);
@@ -173,18 +221,20 @@ public:
         addManual(QStringLiteral("↓"), 2, 1, 0, 1, 0);
         addManual(QStringLiteral("Zoom −"), 3, 0, 0, 0, -1);
         addManual(QStringLiteral("Zoom +"), 3, 2, 0, 0, 1);
-        layout->addRow(QStringLiteral("Controlo manual"), manualBody);
+        advancedLayout->addRow(QStringLiteral("Controlo manual"), manualBody);
         presetNumber = new QSpinBox(body); presetNumber->setRange(1, 127); presetNumber->setValue(1);
-        layout->addRow(QStringLiteral("Número do preset"), presetNumber);
+        advancedLayout->addRow(QStringLiteral("Número do preset"), presetNumber);
         for (const auto &entry : {std::pair<const char *, const char *>{"Ir ao preset", "preset_recall"},
                                  {"Guardar preset", "preset_save"}, {"Posição inicial", "home"}}) {
             auto *button = new QPushButton(QString::fromUtf8(entry.first), body);
             const QString action = QString::fromUtf8(entry.second);
-            layout->addRow(button);
+            advancedLayout->addRow(button);
             QObject::connect(button, &QPushButton::clicked, this, [this, action]() {
                 manualTimer.stop(); send(QJsonObject{{"action", action}, {"number", presetNumber->value()}});
             });
         }
+        layout->addRow(showAdvanced);
+        layout->addRow(advanced);
         auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setWidget(body);
         setWidget(scroll);
         worker.setProcessChannelMode(QProcess::SeparateChannels);
@@ -200,14 +250,16 @@ public:
         });
         QObject::connect(connectButton, &QPushButton::clicked, this, [this]() {
             if (worker.state() != QProcess::NotRunning) { shutdown(); return; }
+            const bool fixed = cameraMode->currentData().toString() == QStringLiteral("fixed");
             const QString kind = protocol->currentData().toString();
             const bool invalidConnection = kind == "onvif" ? (ptz->text().isEmpty() || profile->text().isEmpty())
                 : kind == "visca_serial" ? serialPort->text().isEmpty()
                 : kind == "pelco_d" ? (host->text().isEmpty() && serialPort->text().isEmpty()) : host->text().isEmpty();
-            if (video->text().isEmpty() || invalidConnection) {
+            if (video->text().isEmpty() || (!fixed && invalidConnection) || (fixed && obsSource->currentData().toString().isEmpty())) {
                 status->setText(QStringLiteral("Preencha vídeo e os dados de ligação do protocolo selecionado.")); return;
             }
             pending.clear();
+            sceneZoom.setSource(fixed ? obsSource->currentData().toString() : QString());
             auto env = QProcessEnvironment::systemEnvironment();
             env.insert("VTS_PTZ_USER", user->text()); env.insert("VTS_PTZ_PASSWORD", password->text());
             worker.setProcessEnvironment(env);
@@ -216,7 +268,8 @@ public:
             worker.start();
         });
         QObject::connect(&worker, &QProcess::started, this, [this]() {
-            send(QJsonObject{{"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
+            send(QJsonObject{{"cameraMode", cameraMode->currentData().toString()},
+                             {"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
                              {"invertPan", invertPan->isChecked()}, {"invertTilt", invertTilt->isChecked()},
                              {"speed", speed->value()}, {"protocol", protocol->currentData().toString()},
                              {"preset", motionPreset->currentData().toString()}, {"host", host->text()},
@@ -234,6 +287,12 @@ public:
                 const auto row = pending.left(newline); pending.remove(0, newline+1);
                 const auto message = QJsonDocument::fromJson(row).object();
                 if (message.contains("status")) status->setText(message["status"].toString());
+                if (message["zoomReset"].toBool(false)) sceneZoom.restore();
+                if (message.contains("digitalCrop") && cameraMode->currentData().toString() == QStringLiteral("fixed")) {
+                    const QJsonObject crop = message["digitalCrop"].toObject();
+                    sceneZoom.apply(crop["left"].toDouble(), crop["top"].toDouble(),
+                                    crop["width"].toDouble(), crop["height"].toDouble());
+                }
                 if (message.contains("frame")) {
                     preview->setFrame(QByteArray::fromBase64(message["frame"].toString().toLatin1()));
                     watchdog.start();
@@ -242,11 +301,32 @@ public:
             if (pending.size() > 4000000) shutdown();
         });
         QObject::connect(&worker, &QProcess::readyReadStandardError, this, [this]() { worker.readAllStandardError(); });
-        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { watchdog.stop(); manualTimer.stop(); });
-        QObject::connect(stop, &QPushButton::clicked, this, [this]() { manualTimer.stop(); send(QJsonObject{{"action", "stop"}}); });
+        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { watchdog.stop(); manualTimer.stop(); sceneZoom.restore(); });
+        QObject::connect(stop, &QPushButton::clicked, this, [this]() { manualTimer.stop(); sceneZoom.restore(); send(QJsonObject{{"action", "stop"}}); });
         preview->selected = [this](QJsonArray box) { send(QJsonObject{{"action", "select"}, {"box", box}}); };
         QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { shutdown(); });
     }
+    void selectFixedSource(const QString &name) {
+        // Selection does not start tracking automatically or change OBS scenes.
+        if (worker.state() != QProcess::NotRunning)
+            shutdown();
+        cameraMode->setCurrentIndex(cameraMode->findData(QStringLiteral("fixed")));
+        obsSource->clear();
+        obsSource->addItem(QStringLiteral("Selecione a fonte do OBS"), QString());
+        obs_enum_sources([](void *ctx, obs_source_t *source) -> bool {
+            if (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO) {
+                auto *selector = static_cast<QComboBox *>(ctx);
+                const QString sourceName = QString::fromUtf8(obs_source_get_name(source));
+                selector->addItem(sourceName, sourceName);
+            }
+            return true;
+        }, obsSource);
+        const int index = obsSource->findData(name);
+        if (index >= 0)
+            obsSource->setCurrentIndex(index);
+        status->setText(QStringLiteral("Fonte selecionada. Configure o endereço RTSP ou device:0 e ligue a câmera."));
+    }
+
     ~VisionTrackDock() override { shutdown(); }
 };
 

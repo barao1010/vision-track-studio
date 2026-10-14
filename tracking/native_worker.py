@@ -14,10 +14,33 @@ from identity_tracker import IdentityTracker
 from cinema_controller import CinemaPTZController
 from ptz_target_controller import Box, TargetPTZController
 from ai_detector import PersonDetector, distinct_match
+from digital_zoom import DigitalZoomController
 
 
 def emit(**data):
     print(json.dumps(data), flush=True)
+
+
+class FixedCamera:
+    """Virtual control surface: fixed cameras cannot receive pan/tilt commands."""
+    def move(self, *args):
+        pass
+    def stop(self):
+        pass
+    def home(self):
+        pass
+    def preset(self, *args):
+        pass
+
+
+def open_video(video):
+    # Video capture cards and USB webcams are exposed by Windows as indexes.
+    if isinstance(video, int) or (isinstance(video, str) and video.startswith("device:")):
+        index = int(video.split(":", 1)[1]) if isinstance(video, str) else video
+        return cv2.VideoCapture(index, cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY)
+    return cv2.VideoCapture(video, cv2.CAP_FFMPEG,
+                            [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
+                             cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000])
 
 
 def main():
@@ -34,18 +57,19 @@ def main():
     threading.Thread(target=read_commands, daemon=True).start()
     camera = stream = controller = None
     identity = IdentityTracker()
+    digital = DigitalZoomController()
+    fixed_mode = False
     manual = None
     manual_until = 0
     try:
         config = commands.get(timeout=15)
         emit(status="A carregar o detector de pessoas por IA…")
         detector = PersonDetector()
-        camera = create_camera(config, os.environ.get("VTS_PTZ_USER", ""), os.environ.get("VTS_PTZ_PASSWORD", ""))
+        fixed_mode = config.get("cameraMode") == "fixed"
+        camera = FixedCamera() if fixed_mode else create_camera(config, os.environ.get("VTS_PTZ_USER", ""), os.environ.get("VTS_PTZ_PASSWORD", ""))
         controller = CinemaPTZController(camera, preset=config.get("preset", "cinema"),
                                          max_speed=max(.05, min(.6, float(config.get("speed", .32)))))
-        stream = cv2.VideoCapture(config["video"], cv2.CAP_FFMPEG,
-                                 [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
-                                  cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000])
+        stream = open_video(config["video"])
         if not stream.isOpened():
             raise RuntimeError("Não foi possível abrir o vídeo da câmera.")
         emit(status="Ligado. Arraste um retângulo sobre a pessoa.")
@@ -55,6 +79,8 @@ def main():
             if not ok:
                 controller.stop()
                 emit(status="Vídeo interrompido. Câmera parada.")
+                if fixed_mode:
+                    emit(zoomReset=True)
                 break
             h, w = frame.shape[:2]
             frame_number += 1
@@ -67,11 +93,17 @@ def main():
                     return
                 if action == "stop":
                     controller.stop()
+                    digital.reset()
+                    if fixed_mode:
+                        emit(zoomReset=True)
                     identity.clear()
                     manual = None
                     emit(status="Rastreio parado.")
                 elif action == "select":
                     controller.stop()
+                    digital.reset()
+                    if fixed_mode:
+                        emit(zoomReset=True)
                     identity.clear()
                     manual = None
                     x, y, bw, bh = [int(v) for v in command["box"]]
@@ -88,12 +120,18 @@ def main():
                     identity.select((x, y, bw, bh), appearance(frame, (x, y, bw, bh)), time.monotonic())
                     emit(status="Alvo selecionado. Rastreio ativo.")
                 elif action == "manual":
+                    if fixed_mode:
+                        emit(status="Câmara fixa: acompanhamento disponível através do zoom digital.")
+                        continue
                     identity.clear()
                     if manual is None:
                         controller.stop()
                     manual = tuple(max(-1, min(1, float(command.get(axis, 0)))) for axis in ("pan", "tilt", "zoom"))
                     manual_until = time.monotonic() + .3
                 elif action in ("preset_recall", "preset_save", "home"):
+                    if fixed_mode:
+                        emit(status="Presets físicos indisponíveis em câmaras fixas.")
+                        continue
                     identity.clear()
                     manual = None
                     controller.stop()
@@ -115,7 +153,12 @@ def main():
                 old_state = identity.state
                 box = identity.update(people, signatures, now, frame_number)
                 if box is not None:
-                    controller.update(w, h, box, identity.velocity, now)
+                    if fixed_mode:
+                        crop = digital.update(w, h, box, identity.velocity)
+                        if crop is not None:
+                            emit(digitalCrop=crop)
+                    else:
+                        controller.update(w, h, box, identity.velocity, now)
                     x, y, bw, bh = [int(v) for v in box]
                     cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 220, 0), 2)
                 else:
@@ -138,6 +181,8 @@ def main():
         emit(status="Falha na ligação ou no rastreio. Verifique vídeo, ONVIF e credenciais.")
         sys.exit(1)
     finally:
+        if fixed_mode:
+            emit(zoomReset=True)
         if camera is not None:
             try:
                 camera.stop()
