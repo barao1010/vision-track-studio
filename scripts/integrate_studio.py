@@ -20,18 +20,18 @@ replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "O
 # Set up the user's chosen OBS-style but independently arranged workspace.
 # No OBS settings dialog, scene, or saved user configuration is rewritten.
 replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',
-        '\t// Vision Track Studio workspace layout - modified 2026-10-14.\\n'
-        '\t// Keep existing OBS scene, source, mixer, transitions and control widgets.\\n'
-        '\taddDockWidget(Qt::RightDockWidgetArea, ui->mixerDock);\\n'
-        '\tsplitDockWidget(ui->mixerDock, controlsDock, Qt::Vertical);\\n'
-        '\tsplitDockWidget(controlsDock, ui->transitionsDock, Qt::Vertical);\\n'
-        '\tauto *visionTrackDock = new VisionTrackDock(this);\\n'
-        '\taddDockWidget(Qt::BottomDockWidgetArea, visionTrackDock);\\n'
-        '\tui->mixerDock->setWindowTitle(QStringLiteral("Mixer de Áudio"));\\n'
-        '\tui->transitionsDock->setWindowTitle(QStringLiteral("Transição"));\\n'
-        '\tui->menuDocks->addAction(visionTrackDock->toggleViewAction());\\n'
-        '\tresizeDocks({ui->scenesDock, ui->sourcesDock}, {420, 420}, Qt::Vertical);\\n'
-        '\tresizeDocks({ui->mixerDock, controlsDock, ui->transitionsDock}, {390, 250, 170}, Qt::Vertical);\\n'
+        '\t// Vision Track Studio workspace layout - modified 2026-10-14.\n'
+        '\t// Keep existing OBS scene, source, mixer, transitions and control widgets.\n'
+        '\taddDockWidget(Qt::RightDockWidgetArea, ui->mixerDock);\n'
+        '\tsplitDockWidget(ui->mixerDock, controlsDock, Qt::Vertical);\n'
+        '\tsplitDockWidget(controlsDock, ui->transitionsDock, Qt::Vertical);\n'
+        '\tauto *visionTrackDock = new VisionTrackDock(this);\n'
+        '\taddDockWidget(Qt::BottomDockWidgetArea, visionTrackDock);\n'
+        '\tui->mixerDock->setWindowTitle(QStringLiteral("Mixer de Áudio"));\n'
+        '\tui->transitionsDock->setWindowTitle(QStringLiteral("Transição"));\n'
+        '\tui->menuDocks->addAction(visionTrackDock->toggleViewAction());\n'
+        '\tresizeDocks({ui->scenesDock, ui->sourcesDock}, {420, 420}, Qt::Vertical);\n'
+        '\tresizeDocks({ui->mixerDock, controlsDock, ui->transitionsDock}, {390, 250, 170}, Qt::Vertical);\n'
         '\tstartingDockLayout = saveState();')
 # Reposition the existing small dock at the left to mimic the reference.
 replace("frontend/widgets/OBSBasic.cpp",
