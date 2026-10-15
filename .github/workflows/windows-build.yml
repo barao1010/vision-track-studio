@@ -47,6 +47,7 @@ jobs:
           python vision-track-studio/scripts/brand_windows.py obs-studio
           python vision-track-studio/scripts/integrate_studio.py obs-studio
           python vision-track-studio/scripts/generate_identity.py obs-studio
+          python vision-track-studio/scripts/apply_dashboard.py obs-studio
       - name: Configure Windows
         working-directory: obs-studio
         run: cmake --preset windows-x64
