@@ -26,10 +26,10 @@ else:
 styles = getSampleStyleSheet()
 styles['BodyText'].fontName = 'VT'
 styles.add(ParagraphStyle(name='TitleVT', fontName='VT-Bold', fontSize=28, leading=34, textColor=colors.HexColor('#071a3d'), spaceAfter=18))
-styles.add(ParagraphStyle(name='SectionVT', fontName='VT-Bold', fontSize=16, leading=21, textColor=colors.HexColor('#1261a8'), spaceBefore=13, spaceAfter=9))
+styles.add(ParagraphStyle(name='SectionVT', fontName='VT-Bold', fontSize=16, leading=21, textColor=colors.HexColor('#1261a8'), spaceBefore=10, spaceAfter=8))
 styles['BodyText'].fontSize = 10
 styles['BodyText'].leading = 14
-styles['BodyText'].spaceAfter = 8
+styles['BodyText'].spaceAfter = 6
 story = []
 def p(text): story.append(Paragraph(text, styles['BodyText']))
 def heading(text): story.append(Paragraph(text, styles['SectionVT']))
@@ -57,7 +57,7 @@ screenshot = ROOT / 'assets/desktop.png'
 if screenshot.exists():
     image = ImageReader(str(screenshot))
     width, height = image.getSize()
-    story.append(Image(str(screenshot), width=420, height=420 * height / width))
+    story.append(Image(str(screenshot), width=400, height=400 * height / width))
     p('Captura da interface real em ambiente de teste. A aparência pode variar entre sistemas.')
 else:
     p('A captura da interface será acrescentada pelo workflow de empacotamento após o teste de arranque.')

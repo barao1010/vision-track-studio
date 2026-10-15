@@ -12,7 +12,7 @@ SetupIconFile=..\assets\vision-track.ico
 UninstallDisplayIcon={app}\VisionTrackStudio.exe
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-Compression=lzma2
+Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern
 [Files]
