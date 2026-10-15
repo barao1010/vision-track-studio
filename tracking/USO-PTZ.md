@@ -1,38 +1,37 @@
-# Vision Track Studio — protótipo de seleção e rastreamento PTZ
+# Vision Track Studio
+## Manual de utilização - edição experimental Windows
 
-O código da versão preview inclui um painel Qt nativo com vídeo, ligação ONVIF, seleção por retângulo e botão de parar. O motor combina deteção de pessoas por IA (YOLOX), OpenCV CSRT e comparação de aparência. A seleção exige uma pessoa distinta. É rastreio experimental; pessoas semelhantes e oclusões continuam a exigir validação real. A compilação e a validação em hardware determinam a disponibilidade de cada release.
+### 1. Instalação e identidade
+Execute o instalador do Vision Track Studio. O novo símbolo azul V identifica o aplicativo, o atalho, a barra de tarefas e a janela Sobre. A distribuição é independente do OBS Project e mantém os avisos de licença aplicáveis.
 
-## Painel integrado no Windows
-Abra **Painéis → Vision Track • Rastreio PTZ**. Preencha o endereço RTSP, o serviço ONVIF PTZ, o token do perfil, utilizador e senha da câmera. Clique em **Ligar / desligar câmera**. No vídeo do painel, arraste um retângulo à volta do corpo da pessoa. Use **PARAR RASTREIO** para interromper os movimentos. O rastreio para se perder o alvo ou detectar aparência ambígua; selecione novamente para retomar. A senha não é gravada num ficheiro. O vídeo RTSP deste painel é independente das fontes de cena: adicione a mesma câmera como fonte de vídeo para a transmissão.
+### 2. Novo painel principal
+Cenas e Fontes ficam à esquerda. A pré-visualização ocupa a área central; o programa e as transições ficam ao seu lado. Mixer e controlos de transmissão ficam à direita. O painel inferior reúne vídeo de rastreio, controlos PTZ e ligação à câmera.
+Ao atualizar, a nova disposição substitui uma vez o layout antigo. Para reaplicar, abra Painéis e escolha Aplicar novo layout Vision Track. As opções de configuração continuam acessíveis pelo botão Configurações.
 
-## Requisitos
-Python 3.11+ no Windows, `pip install -r tracking/requirements.txt`. Cámara PTZ com endpoint ONVIF e perfil configurado. O PC deve alcançar a cámara via LAN.
+### 3. Ligar uma câmera
+Adicione a câmera às Fontes para utilizá-la na gravação ou transmissão. O vídeo do painel de rastreio é uma ligação separada: introduza o endereço RTSP fornecido pelo fabricante.
+Para ONVIF, indique o serviço PTZ, token do perfil, utilizador e senha da câmera. Para VISCA IP, indique o IP e a porta UDP com cabeçalho VISCA, normalmente 52381. Para VISCA Serial, indique a porta COM e o baud rate correto. Para Pelco-D, indique a ligação serial ou TCP, baud rate e endereço da câmera.
+Clique Ligar / desligar câmera. O computador precisa alcançar a câmera na rede. As credenciais são usadas nesta sessão; não partilhe senhas, URLs com credenciais ou capturas que as revelem.
 
-No PowerShell:
-```powershell
-$env:VTS_PTZ_USER="admin"
-$env:VTS_PTZ_PASSWORD="SUA_SENHA"
-python tracking/ptz_companion.py --rtsp "rtsp://usuario:senha@192.168.1.99:554/stream1" --ptz-url "http://192.168.1.99/onvif/ptz_service" --profile-token "Profile_1"
-```
-A URL RTSP e o token ONVIF variam por fabricante. **Não copie passwords para GitHub ou screenshots.** Clique e arraste em redor da pessoa, pressione **S** para parar e **ESC** para sair.
+### 4. Selecionar e acompanhar a pessoa
+Arraste um retângulo sobre o corpo da pessoa no vídeo do painel. A IA precisa detetar uma pessoa distinta nessa área para iniciar.
+A seleção mantém uma referência visual fixa durante a sessão. Quando o alvo desaparece, a câmera para e a seleção é preservada. A recuperação exige três novas deteções consistentes. Depois de um cruzamento ambíguo, exige cinco confirmações e rejeita aparências concorrentes.
+Pessoas com aparência semelhante podem exigir nova seleção manual. Esta associação visual não identifica pessoas por nome e não garante identidade absoluta.
 
-## Limitações e segurança
-- O controlador usa comandos de velocidade ONVIF; requer câmera compatível e calibração de eixos. Alguns dispositivos exigem configurações de velocidade diferentes.
-- A IA detecta pessoas; a associação por posição e aparência preserva a seleção da sessão. Não identifica pessoas pelo nome nem garante resolver todas as oclusões.
-- O painel controla ONVIF; não inclui VISCA, fallback de câmera fixa, autofocus nem zoom automático. O zoom permanece a zero.
-- Só opera em redes/câmaras autorizadas; teste primeiro sem ninguém perto de partes móveis e com velocidades baixas.
-- Teste da câmara real, comportamento de encerramento inesperado e watchdog PTZ ainda necessários antes de uso numa live.
+### 5. Movimento e controlo manual
+Cinema, Suave e Dinâmico alteram resposta, aceleração e margem de movimento. Ajuste Velocidade máxima e inversões dos eixos conforme a instalação. O enquadramento preserva espaço acima do corpo.
+Segure uma seta ou Zoom + / Zoom - para mover manualmente. Soltar envia Stop. O controlo manual cancela a seleção; selecione novamente para retomar a IA. PARAR RASTREIO interrompe o movimento e limpa a seleção.
+Escolha um número para guardar ou chamar um preset. Posição inicial depende do protocolo e da câmera; Pelco-D não oferece esse comando.
 
-## Integração futura
-Validação de identidade em cruzamentos reais, descoberta automática ONVIF, VISCA e testes com modelos de câmera reais continuam pendentes. O modelo YOLOX e o helper OpenCV Zoo são Apache-2.0; veja models/LICENSE-YOLOX.txt. Preservar licenças OBS e componentes terceiros.
+### 6. Áudio, gravação e transmissão
+Configure microfones e fontes no mixer nativo. Confirme que os medidores respondem antes de gravar. Configure o serviço de transmissão e faça uma gravação de teste para verificar imagem, som e sincronização.
+Iniciar gravação e Iniciar transmissão são operações distintas. Confirme o destino e as configurações antes de iniciar uma live.
 
+### 7. Limitações desta edição
+Esta edição tem rastreio PTZ físico por ONVIF, VISCA IP/Serial e Pelco-D. Recorte digital automático de fontes fixas, troca automática entre várias câmeras, joystick físico e descoberta automática ONVIF ainda não estão integrados.
+O detector nativo é YOLOX. Os testes automáticos e o teste de arranque não substituem testes no Windows com as câmeras reais, cruzamentos de pessoas, rede, áudio e transmissão.
+Uma proposta visual da interface não é uma captura de validação. Consulte a versão publicada e as notas de lançamento antes de atualizar.
 
-## Controlos alinhados com Vision Track AI
+### 8. Licenças e suporte
+Preserve COPYING, licenças de terceiros e código-fonte correspondente distribuídos com esta edição. OBS Studio é GPL-2.0-ou-posterior; o worker combinado inclui componentes sob GPLv3 e Apache-2.0, conforme LICENSES-TRACKING.md.
 
-Escolha ONVIF, VISCA IP (UDP com cabeçalho de sequência), VISCA Serial ou Pelco-D. Para VISCA IP indique host e porta (normalmente 52381). Para serial indique COM e baud rate; Pelco-D permite serial ou TCP e endereço da câmera. Ajuste inversões de eixo conforme a instalação.
-
-Cinema, Suave e Dinâmico usam os parâmetros de movimento do Vision Track AI. O enquadramento conserva margem acima do corpo e espaço na direção do movimento. A referência de aparência permanece fixa à pessoa selecionada. Após uma perda temporária, três novas deteções consistentes são necessárias para retomar; depois de uma ambiguidade são exigidas cinco confirmações e rejeição das aparências concorrentes. Pessoas indistinguíveis podem exigir seleção manual.
-
-Segure as setas ou Zoom +/- para controlo manual. Soltar envia Stop; a sessão manual também expira se deixar de receber comandos. O controlo manual cancela o alvo selecionado. Escolha o número do preset e use Ir ao preset, Guardar preset ou Posição inicial (esta última não é suportada por Pelco-D).
-
-Esta integração é para PTZ física. O recorte digital automático de fontes fixas, troca entre várias câmeras e joystick físico do app anterior ainda não foram integrados ao pipeline nativo do OBS. O detector de pessoas continua YOLOX no Studio; o app anterior usa COCO-SSD. Não há garantia de identidade absoluta com roupas semelhantes. A descoberta automática ONVIF não é implementada nesta revisão.

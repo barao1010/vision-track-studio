@@ -1,3 +1,5 @@
+![Vision Track Studio](assets/vision-track-logo.svg)
+
 # Vision Track Studio
 
 Distribuição Windows baseada no código original do OBS Studio, com painel Qt de rastreio PTZ. Projeto independente, sem patrocínio do OBS Project.

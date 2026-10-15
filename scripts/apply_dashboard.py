@@ -70,7 +70,7 @@ def install(root):
                          saveState().toBase64().constData());
         config_save_safe(App()->GetUserConfig(), "tmp", nullptr);
     };
-    for (auto *panel : {ui->scenesDock, ui->sourcesDock, ui->mixerDock, controlsDock, ui->transitionsDock})
+    for (QDockWidget *panel : QList<QDockWidget *>{ui->scenesDock, ui->sourcesDock, ui->mixerDock, controlsDock, ui->transitionsDock})
         panel->setProperty("vtsPanel", true);
     if (auto *trackingPanel = findChild<QDockWidget *>(QStringLiteral("visionTrackDock")))
         trackingPanel->setProperty("vtsPanel", true);

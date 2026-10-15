@@ -43,11 +43,12 @@ jobs:
           python-version: '3.11'
       - name: Apply native identity and PTZ dock
         run: |
-          python -m pip install pillow==11.3.0
+          python -m pip install pillow==11.3.0 reportlab==4.4.3
           python vision-track-studio/scripts/brand_windows.py obs-studio
           python vision-track-studio/scripts/integrate_studio.py obs-studio
           python vision-track-studio/scripts/generate_identity.py obs-studio
           python vision-track-studio/scripts/apply_dashboard.py obs-studio
+          python vision-track-studio/scripts/build_manual.py vision-track-studio/tracking/USO-PTZ.md Vision-Track-Studio-Manual-PT.pdf
       - name: Configure Windows
         working-directory: obs-studio
         run: cmake --preset windows-x64
@@ -68,6 +69,8 @@ jobs:
           if (-not (Test-Path "$runtime/bin/64bit/vision-track-studio.exe")) { throw 'Studio executable missing' }
           Copy-Item vision-track-studio/dist/vision-track-worker "$runtime/bin/64bit/vision-track-worker" -Recurse
           Copy-Item obs-studio/COPYING "$runtime/COPYING"
+          New-Item -ItemType Directory -Force "$runtime/manuals" | Out-Null
+          Copy-Item Vision-Track-Studio-Manual-PT.pdf "$runtime/manuals/Vision-Track-Studio-Manual-PT.pdf"
           Copy-Item vision-track-studio/tracking/USO-PTZ.md "$runtime/USO-PTZ.md"
           Copy-Item vision-track-studio/tracking/LICENSES.md "$runtime/LICENSES-TRACKING.md"
           Copy-Item vision-track-studio/tracking/models/LICENSE-GPL3.txt "$runtime/COPYING-GPL3"
@@ -91,6 +94,7 @@ jobs:
             Vision-Track-Studio-Windows-preview.zip
             Vision-Track-Studio-Setup-preview.exe
             Vision-Track-Studio-Source.zip
+            Vision-Track-Studio-Manual-PT.pdf
           if-no-files-found: error
       - name: Publish explicitly experimental release
         shell: pwsh
@@ -98,5 +102,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v0.1.0-preview.${{ github.run_number }}"
-          gh release create $tag Vision-Track-Studio-Windows-preview.zip Vision-Track-Studio-Setup-preview.exe Vision-Track-Studio-Source.zip --repo '${{ github.repository }}' --target '${{ github.sha }}' --prerelease --title "Vision Track Studio $tag" --notes 'Windows preview based on OBS. Includes native PTZ connection and target-selection dock. Experimental visual tracking; real camera, broadcast, audio and UI validation remain required. Corresponding GPL sources included. Not a final production release.'
+          gh release create $tag Vision-Track-Studio-Windows-preview.zip Vision-Track-Studio-Setup-preview.exe Vision-Track-Studio-Source.zip Vision-Track-Studio-Manual-PT.pdf --repo '${{ github.repository }}' --target '${{ github.sha }}' --prerelease --title "Vision Track Studio $tag" --notes 'Windows preview based on OBS. Includes native PTZ connection and target-selection dock. Experimental visual tracking; real camera, broadcast, audio and UI validation remain required. Corresponding GPL sources included. Not a final production release.'
 
