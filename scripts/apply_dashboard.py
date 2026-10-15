@@ -70,20 +70,50 @@ def install(root):
                          saveState().toBase64().constData());
         config_save_safe(App()->GetUserConfig(), "tmp", nullptr);
     };
+    for (auto *panel : {ui->scenesDock, ui->sourcesDock, ui->mixerDock, controlsDock, ui->transitionsDock})
+        panel->setProperty("vtsPanel", true);
+    if (auto *trackingPanel = findChild<QDockWidget *>(QStringLiteral("visionTrackDock")))
+        trackingPanel->setProperty("vtsPanel", true);
     // Scope colours to the main workspace; settings dialogs keep their own styling.
     setStyleSheet(styleSheet() + QStringLiteral(R"VTS(
-        QMainWindow#OBSBasic { background: #0b131b; }
-        QMainWindow#OBSBasic::separator { background: #091119; width: 8px; height: 8px; }
-        QDockWidget#scenesDock, QDockWidget#sourcesDock, QDockWidget#mixerDock,
-        QDockWidget#transitionsDock, QDockWidget#controlsDock, QDockWidget#visionTrackDock
-            { color: #f1f5f9; border: 1px solid #2c3c49; border-radius: 5px; }
-        QDockWidget::title { background: #192630; padding: 9px 10px; }
+
+        QMainWindow#OBSBasic { background: #0b1018; }
+        QMainWindow#OBSBasic::separator { background: #0b1018; width: 8px; height: 8px; }
+        QDockWidget[vtsPanel="true"] { color: #edf3fc; font-family: "Segoe UI"; font-size: 12px;
+            border: 1px solid #273447; border-radius: 8px; }
+        QDockWidget[vtsPanel="true"]::title { background: #182230; padding: 10px 12px;
+            font-weight: 600; border-bottom: 1px solid #273447; }
+        QDockWidget[vtsPanel="true"] QWidget { color: #d9e3f2; }
+        QDockWidget[vtsPanel="true"] QPushButton { background: #1c2a3b; color: #edf3fc;
+            border: 1px solid #34465d; border-radius: 5px; padding: 7px 10px; min-height: 16px; }
+        QDockWidget[vtsPanel="true"] QPushButton:hover { background: #273a52; border-color: #5791db; }
+        QDockWidget[vtsPanel="true"] QPushButton:pressed { background: #123e77; }
+        QDockWidget[vtsPanel="true"] QPushButton:focus { border: 1px solid #69aaff; }
+        QDockWidget[vtsPanel="true"] QPushButton:disabled { color: #8290a3; background: #161f2c; border-color: #263345; }
+        QDockWidget[vtsPanel="true"] QLineEdit,
+        QDockWidget[vtsPanel="true"] QComboBox,
+        QDockWidget[vtsPanel="true"] QSpinBox,
+        QDockWidget[vtsPanel="true"] QDoubleSpinBox { background: #101a27; color: #edf3fc;
+            border: 1px solid #34465d; border-radius: 5px; padding: 5px; min-height: 18px; }
+        QDockWidget[vtsPanel="true"] QLineEdit:focus,
+        QDockWidget[vtsPanel="true"] QComboBox:focus { border-color: #428eff; }
+        QDockWidget[vtsPanel="true"] QSlider::groove:horizontal { height: 4px; background: #34465d; border-radius: 2px; }
+        QDockWidget[vtsPanel="true"] QSlider::sub-page:horizontal { background: #3187ff; border-radius: 2px; }
+        QDockWidget[vtsPanel="true"] QSlider::handle:horizontal { width: 12px; margin: -4px 0;
+            background: #d7eaff; border-radius: 6px; }
         QWidget#centralwidget, QWidget#canvasEditor, QWidget#previewContainer,
-        QWidget#vtsProgramColumn { background: #0b141d; }
-        QListWidget#scenes, SourceTree#sources { background: #101c26; border: 1px solid #293b49; }
-        QListWidget#scenes::item { min-height: 34px; padding: 4px; }
-        QListWidget#scenes::item:selected { background: #075de0; border-radius: 4px; }
-        QLabel#previewLabel { color: #e7edf5; padding: 8px; border-bottom: 2px solid #1589e9; }
+        QWidget#vtsProgramColumn { background: #0b1018; }
+        QListWidget#scenes, SourceTree#sources { background: #111b28; border: 1px solid #273447; border-radius: 6px; }
+        QListWidget#scenes::item { min-height: 30px; padding: 5px 8px; border-radius: 4px; }
+        QListWidget#scenes::item:hover { background: #1d304a; }
+        QListWidget#scenes::item:selected { background: #1263d7; color: white; }
+        SourceTree#sources::item { min-height: 26px; padding: 2px 6px; }
+        SourceTree#sources::item:selected { background: #183f70; color: #ffffff; }
+        QLabel#previewLabel { color: #e7edf5; padding: 10px; border-bottom: 2px solid #3187ff; }
+        QDockWidget#controlsDock QPushButton { min-height: 28px; font-weight: 600; }
+        QDockWidget#controlsDock QPushButton#streamButton { background: #1263d7; border-color: #338bff; color: white; }
+        QDockWidget#controlsDock QPushButton#streamButton:hover { background: #2279eb; }
+        QDockWidget#controlsDock QPushButton#streamButton[class~="state-active"] { background: #963947; border-color: #d56774; }
     )VTS"));
     auto *dashboardAction = new QAction(QStringLiteral("Aplicar novo layout Vision Track"), this);
     ui->menuDocks->addAction(dashboardAction);
