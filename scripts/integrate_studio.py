@@ -39,11 +39,11 @@ for file in (root / "frontend/data/locale").glob("*.ini"):
     for index, line in enumerate(lines):
         if line.startswith("About.Info="):
             descriptions = {
-                "pt-PT": "Vision Track Studio é uma distribuição independente baseada no OBS Studio, com rastreio PTZ por IA.",
-                "pt-BR": "Vision Track Studio é uma distribuição independente baseada no OBS Studio, com rastreamento PTZ por IA.",
-                "es-ES": "Vision Track Studio es una distribución independiente basada en OBS Studio, con seguimiento PTZ mediante IA.",
+                "pt-PT": "Vision Track Studio: produção de vídeo e rastreio PTZ por IA.",
+                "pt-BR": "Vision Track Studio: produção de vídeo e rastreamento PTZ por IA.",
+                "es-ES": "Vision Track Studio: producción de vídeo y seguimiento PTZ mediante IA.",
             }
-            description = descriptions.get(file.stem, "Vision Track Studio is an independent distribution based on OBS Studio, with AI PTZ tracking.")
+            description = descriptions.get(file.stem, "Vision Track Studio: video production and AI PTZ tracking.")
             lines[index] = f'About.Info="{description}"\n'
         else:
             lines[index] = line.replace("OBS Studio", "Vision Track Studio")

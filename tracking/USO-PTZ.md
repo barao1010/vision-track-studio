@@ -2,7 +2,7 @@
 ## Manual de utilização - edição experimental Windows
 
 ### 1. Instalação e identidade
-Execute o instalador do Vision Track Studio. O novo símbolo azul V identifica o aplicativo, o atalho, a barra de tarefas e a janela Sobre. A distribuição é independente do OBS Project e mantém os avisos de licença aplicáveis.
+Execute o instalador do Vision Track Studio. O novo símbolo azul V identifica o aplicativo, o atalho, a barra de tarefas e a janela Sobre. Os avisos de licença aplicáveis constam da seção Créditos e licenças.
 
 ### 2. Novo painel principal
 Cenas e Fontes ficam à esquerda. A pré-visualização ocupa a área central; o programa e as transições ficam ao seu lado. Mixer e controlos de transmissão ficam à direita. O painel inferior reúne vídeo de rastreio, controlos PTZ e ligação à câmera.
@@ -32,6 +32,6 @@ Esta edição tem rastreio PTZ físico por ONVIF, VISCA IP/Serial e Pelco-D. Rec
 O detector nativo é YOLOX. Os testes automáticos e o teste de arranque não substituem testes no Windows com as câmeras reais, cruzamentos de pessoas, rede, áudio e transmissão.
 Uma proposta visual da interface não é uma captura de validação. Consulte a versão publicada e as notas de lançamento antes de atualizar.
 
-### 8. Licenças e suporte
+### 8. Créditos e licenças
 Preserve COPYING, licenças de terceiros e código-fonte correspondente distribuídos com esta edição. OBS Studio é GPL-2.0-ou-posterior; o worker combinado inclui componentes sob GPLv3 e Apache-2.0, conforme LICENSES-TRACKING.md.
 

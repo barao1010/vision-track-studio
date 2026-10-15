@@ -62,7 +62,7 @@ def build(source, output):
         logo(c,38,792,.42)
         c.setFillColor(colors.white);c.setFont("BrandBold",12);c.drawString(85,810,"VISION TRACK STUDIO")
         c.setFillColor(colors.HexColor("#526176"));c.setFont("BrandRegular",8)
-        c.drawString(38,26,"Vision Track Studio | Distribuição independente baseada no OBS Studio")
+        c.drawString(38,26,"Vision Track Studio | Manual de utilização")
         c.drawRightString(557,26,str(doc.page))
     Path(output).parent.mkdir(parents=True,exist_ok=True)
     doc=SimpleDocTemplate(str(output),pagesize=(595.28,841.89),rightMargin=42,leftMargin=42,topMargin=84,bottomMargin=48,

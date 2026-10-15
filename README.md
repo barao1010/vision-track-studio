@@ -2,7 +2,7 @@
 
 # Vision Track Studio
 
-Distribuição Windows baseada no código original do OBS Studio, com painel Qt de rastreio PTZ. Projeto independente, sem patrocínio do OBS Project.
+Aplicação Windows para produção de vídeo, gravação, transmissão e rastreio PTZ por IA.
 
 ## Estado verificável
 
@@ -12,13 +12,13 @@ Não é uma versão final validada para produção. Áudio, transmissão, plugin
 
 ## Implementado no código
 
-- Base OBS com cenas, fontes, mixer, gravação, transmissão e browser source.
+- Cenas, fontes, mixer, gravação, transmissão e fontes de navegador.
 - Painel nativo com vídeo RTSP, serviço ONVIF, credenciais e seleção do alvo por retângulo.
 - Botão de parar; interrupção do rastreio quando o alvo é perdido ou a aparência diverge.
 - Detector de pessoas por IA (YOLOX/OpenCV Zoo), CSRT e comparação de aparência. A seleção exige uma pessoa distinta; a associação interrompe movimentos em casos ambíguos. Não faz identificação biométrica.
-- Identidade no título, metadados Windows, executável, bandeja, ícones, instalador e tela Sobre; configurações isoladas das do OBS.
+- Identidade no título, metadados Windows, executável, bandeja, ícones, instalador e tela Sobre; configurações próprias.
 - Instalador Windows, pacote portable e código-fonte correspondente na pré-release.
-- Canal de atualização manual nas Releases. Não instala atualizações oficiais do OBS por cima desta distribuição.
+- Canal próprio de atualização manual nas Releases.
 
 ## Ainda pendente
 
