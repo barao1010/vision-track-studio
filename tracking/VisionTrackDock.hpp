@@ -5,6 +5,9 @@
 #include <QComboBox>
 #include <QSpinBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QGroupBox>
 #include <QScrollArea>
 #include <QDoubleSpinBox>
 #include <QDockWidget>
@@ -101,7 +104,20 @@ public:
     explicit VisionTrackDock(QMainWindow *main) : QDockWidget(QStringLiteral("Vision Track • Rastreio PTZ"), main) {
         setObjectName(QStringLiteral("visionTrackDock"));
         auto *body = new QWidget(this);
-        auto *layout = new QFormLayout(body);
+        auto *columns = new QHBoxLayout(body);
+        columns->setContentsMargins(12, 12, 12, 12);
+        columns->setSpacing(16);
+        auto *viewColumn = new QGroupBox(QStringLiteral("Câmera • Selecionar alvo"), body);
+        auto *viewLayout = new QVBoxLayout(viewColumn);
+        auto *controlColumn = new QGroupBox(QStringLiteral("Rastreamento e controlo PTZ"), body);
+        auto *controlLayout = new QFormLayout(controlColumn);
+        auto *connectionColumn = new QGroupBox(QStringLiteral("Conexão da câmera"), body);
+        auto *layout = new QFormLayout(connectionColumn);
+        layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        controlLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        columns->addWidget(viewColumn, 4);
+        columns->addWidget(controlColumn, 3);
+        columns->addWidget(connectionColumn, 3);
         protocol = new QComboBox(body);
         protocol->addItem(QStringLiteral("ONVIF"), QStringLiteral("onvif"));
         protocol->addItem(QStringLiteral("VISCA IP (UDP)"), QStringLiteral("visca_ip"));
@@ -137,20 +153,20 @@ public:
         invertPan = new QCheckBox(QStringLiteral("Inverter eixo horizontal"), body);
         invertTilt = new QCheckBox(QStringLiteral("Inverter eixo vertical (ONVIF)"), body);
         invertTilt->setChecked(true);
-        layout->addRow(invertPan); layout->addRow(invertTilt);
+        controlLayout->addRow(invertPan); controlLayout->addRow(invertTilt);
         speed = new QDoubleSpinBox(body); speed->setRange(.05, .6); speed->setSingleStep(.05); speed->setValue(.32);
-        layout->addRow(QStringLiteral("Velocidade máxima"), speed);
+        controlLayout->addRow(QStringLiteral("Velocidade máxima"), speed);
         motionPreset = new QComboBox(body);
         motionPreset->addItem(QStringLiteral("Cinema"), QStringLiteral("cinema"));
         motionPreset->addItem(QStringLiteral("Suave"), QStringLiteral("suave"));
         motionPreset->addItem(QStringLiteral("Dinâmico"), QStringLiteral("dinamico"));
-        layout->addRow(QStringLiteral("Perfil de movimento"), motionPreset);
+        controlLayout->addRow(QStringLiteral("Perfil de movimento"), motionPreset);
         connectButton = new QPushButton(QStringLiteral("Ligar / desligar câmera"), body);
         layout->addRow(connectButton);
-        preview = new VTPreview(body); layout->addRow(preview);
-        auto *stop = new QPushButton(QStringLiteral("PARAR RASTREIO"), body); layout->addRow(stop);
+        preview = new VTPreview(viewColumn); viewLayout->addWidget(preview, 1);
+        auto *stop = new QPushButton(QStringLiteral("PARAR RASTREIO"), body); controlLayout->addRow(stop);
         status = new QLabel(QStringLiteral("Pronto. Credenciais guardadas apenas nesta sessão."), body);
-        status->setWordWrap(true); layout->addRow(status);
+        status->setWordWrap(true); viewLayout->addWidget(status);
         auto *manualBody = new QWidget(body);
         auto *manualLayout = new QGridLayout(manualBody);
         manualTimer.setInterval(100);
@@ -173,14 +189,14 @@ public:
         addManual(QStringLiteral("↓"), 2, 1, 0, 1, 0);
         addManual(QStringLiteral("Zoom −"), 3, 0, 0, 0, -1);
         addManual(QStringLiteral("Zoom +"), 3, 2, 0, 0, 1);
-        layout->addRow(QStringLiteral("Controlo manual"), manualBody);
+        controlLayout->addRow(QStringLiteral("Controlo manual"), manualBody);
         presetNumber = new QSpinBox(body); presetNumber->setRange(1, 127); presetNumber->setValue(1);
-        layout->addRow(QStringLiteral("Número do preset"), presetNumber);
+        controlLayout->addRow(QStringLiteral("Número do preset"), presetNumber);
         for (const auto &entry : {std::pair<const char *, const char *>{"Ir ao preset", "preset_recall"},
                                  {"Guardar preset", "preset_save"}, {"Posição inicial", "home"}}) {
             auto *button = new QPushButton(QString::fromUtf8(entry.first), body);
             const QString action = QString::fromUtf8(entry.second);
-            layout->addRow(button);
+            controlLayout->addRow(button);
             QObject::connect(button, &QPushButton::clicked, this, [this, action]() {
                 manualTimer.stop(); send(QJsonObject{{"action", action}, {"number", presetNumber->value()}});
             });
