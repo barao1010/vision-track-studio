@@ -1,5 +1,8 @@
 # Estado da equivalência - 0.2.0-dev.2
 
+A geometria da janela, perfil, zoom e cenas Preview/Programa são guardados no projeto.
+Movimento automático e plugins não são reativados ao abrir projetos.
+
 A nova base tem código próprio e uma árvore separada da versão anterior. Não é uma
 Release final nem uma implementação equivalente completa. O histórico foi preservado.
 
@@ -12,6 +15,9 @@ Release final nem uma implementação equivalente completa. O histórico foi pre
 | Microfone / áudio de dispositivo | Adaptador DirectShow integrado | Hardware pendente |
 | Áudio automático de vídeo e RTSP opcional | Integrado | Fontes são descodificadas separadamente do vídeo |
 | Mixer por fonte, volume, mute e medidores | Integrado | Testes de ganho, mute, gating por cena e saturação |
+| Som do sistema / WASAPI | Adaptador integrado via PyAudioWPatch | Sem teste com dispositivo físico |
+| Filtros e ajuste de sincronização | Brilho, contraste, chroma, gate, compressor e atraso de áudio integrados | Testes sintéticos de pixels/PCM; filtros básicos |
+| Plugins próprios | API Python de vídeo, ativação explícita | Testes de efeito e desativação por erro; sem compatibilidade binária anterior |
 | Monitorização de áudio | Integrada via PortAudio | Dispositivo físico não testado |
 | Saída A/V com cadência própria | Integrada | Gravação real e RTMP local testados com ambas as faixas |
 | Gravação MKV / RTMP | Integrada | FFmpeg externo; serviço de transmissão real não testado |
@@ -31,15 +37,15 @@ Release final nem uma implementação equivalente completa. O histórico foi pre
 
 - Validar câmeras, microfones, joystick e serviços reais; medir precisão, latência,
   perda de sinal, recuperação e comportamento de comandos em cada protocolo/modelo.
-- Captura de áudio do sistema por loopback, áudio de páginas web, filtros de áudio/vídeo,
-  monitorização por fonte, offsets de sincronização e compensação de relógios de captura.
+- Validação física de loopback, áudio de páginas web, filtros avançados, monitorização
+  por fonte e compensação automática de relógios de captura. O atraso de áudio é manual.
 - Detector/associação avançados e testes de oclusão/cruzamento reais. HOG e histograma
   de aparência não têm a mesma qualidade de sistemas avançados de rastreio.
 - Encaminhamento de áudio e PTZ por câmera durante handoff. A troca atual substitui a
   imagem da fonte original; mudar de câmera interrompe o PTZ até configuração explícita.
 - Equivalência com plugins, filtros e fontes especializadas do motor anterior. Não existe
   compatibilidade binária nem migração automática de projetos.
-- Persistência das posições dos painéis, tradução completa PT/EN/ES, atualização automática,
+- Posições dos painéis ajustáveis, tradução completa PT/EN/ES, atualização automática,
   gestão de licenças/assinaturas e integrações externas adicionais.
 - Testes prolongados de CPU/memória, recuperação de dispositivos, gravações longas,
   assinatura de código, instalador final e auditoria de dependências distribuídas.

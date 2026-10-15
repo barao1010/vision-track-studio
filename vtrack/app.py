@@ -94,13 +94,17 @@ class App:
         menu = tk.Menu(menu_button, tearoff=False)
         for label, kind in [('Cor', 'color'), ('Imagem', 'image'), ('Texto', 'text'), ('Vídeo', 'video'), ('RTSP', 'rtsp'),
             ('Câmera USB', 'camera'), ('Ecrã', 'desktop'), ('Janela', 'window'), ('Microfone / áudio DirectShow', 'microphone'),
-            ('Ficheiro de áudio', 'audio'), ('Link web / CSS', 'browser')]:
+            ('Ficheiro de áudio', 'audio'), ('Som do sistema (WASAPI)', 'system_audio'), ('Link web / CSS', 'browser')]:
             menu.add_command(label=label, command=lambda value=kind: self.guard(lambda: self.add_source(value)))
         menu_button.configure(menu=menu)
         menu_button.pack(fill='x', pady=3)
-        for label, fn in [('Editar fonte / CSS', self.edit_value), ('Posição / tamanho', self.edit_transform),
+        actions_button = ttk.Menubutton(sources, text='Ações da fonte')
+        actions_menu = tk.Menu(actions_button, tearoff=False)
+        for label, fn in [('Editar fonte / CSS', self.edit_value), ('Posição / tamanho', self.edit_transform), ('Filtros A/V', self.edit_effects), ('Plugin de vídeo', self.load_plugin),
             ('Mostrar / ocultar', self.toggle_source), ('Subir camada', self.raise_source), ('Remover', self.remove_source)]:
-            self.button(sources, label, fn)
+            actions_menu.add_command(label=label, command=lambda action=fn: self.guard(action))
+        actions_button.configure(menu=actions_menu)
+        actions_button.pack(fill='x', pady=3)
         center = ttk.Frame(body)
         center.grid(row=0, column=1, sticky='nsew', padx=4)
         center.columnconfigure(0, weight=1)
@@ -268,6 +272,10 @@ class App:
     def add_source(self, kind):
         if kind in {'image', 'video', 'audio'}:
             value = filedialog.askopenfilename(title='Escolher ficheiro')
+        elif kind == 'system_audio':
+            if self.runtime.monitor:
+                raise ValueError('Desligue a monitorização antes de capturar som do sistema para evitar retorno')
+            value = 'default'
         elif kind == 'desktop':
             value = 'desktop'
         else:
@@ -364,7 +372,52 @@ class App:
             self.refresh_lists()
 
     def toggle_monitor(self):
+        if not self.runtime.monitor and any(source.kind == 'system_audio' for source in self.all_sources()):
+            raise ValueError('Remova a fonte Som do sistema antes de ligar monitorização para evitar retorno')
         self.runtime.toggle_monitor()
+
+    def load_plugin(self):
+        source = self.selected_source()
+        if not source:
+            return
+        if source.id in self.studio.compositor.plugins:
+            self.studio.compositor.plugins.pop(source.id)
+            return
+        path = filedialog.askopenfilename(filetypes=[('Plugin Python', '*.py')])
+        if path and messagebox.askyesno('Executar plugin', 'Plugins executam código com acesso ao computador. Confia no ficheiro escolhido?'):
+            from .plugins import VideoPlugin
+            self.studio.compositor.plugins[source.id] = VideoPlugin(path)
+
+    def edit_effects(self):
+        source = self.selected_source()
+        if not source:
+            return
+        dialog = tk.Toplevel(self.root)
+        dialog.title('Filtros e ajuste de sincronização')
+        defaults = {'brightness': 1, 'contrast': 1, 'chroma': '', 'chroma_threshold': 80, 'gate_db': -120, 'compressor_db': 0, 'compressor_ratio': 4, 'delay_ms': 0}
+        labels = {'brightness': 'Brilho (0 a 3)', 'contrast': 'Contraste (0 a 3)', 'chroma': 'Cor chroma (#00ff00 ou vazio)', 'chroma_threshold': 'Tolerância chroma (0 a 255)', 'gate_db': 'Gate dB (-120 desliga)', 'compressor_db': 'Compressor dB (0 desliga)', 'compressor_ratio': 'Razão compressor (1 a 20)', 'delay_ms': 'Atraso áudio ms (0 a 2000)'}
+        variables = {}
+        for row, (key, default) in enumerate(defaults.items()):
+            ttk.Label(dialog, text=labels[key], padding=5).grid(row=row, column=0)
+            variables[key] = tk.StringVar(value=str(source.settings.get(key, default)))
+            ttk.Entry(dialog, textvariable=variables[key]).grid(row=row, column=1)
+        def apply():
+            import math
+            updates = {}
+            for key, variable in variables.items():
+                value = variable.get()
+                if key == 'chroma':
+                    if value:
+                        from PIL import ImageColor
+                        ImageColor.getrgb(value)
+                    updates[key] = value
+                else:
+                    updates[key] = float(value)
+                    if not math.isfinite(updates[key]):
+                        raise ValueError('Valor numérico inválido')
+            source.settings.update(updates)
+            dialog.destroy()
+        ttk.Button(dialog, text='Aplicar', command=lambda: self.guard(apply)).grid(row=len(defaults), columnspan=2, pady=8)
 
     def list_devices(self):
         found = devices()
@@ -376,6 +429,7 @@ class App:
             if any(source.kind in {'rtsp', 'browser'} for source in self.all_sources()):
                 if not messagebox.askyesno('Projeto', 'Endereços com credenciais/chaves serão guardados em texto. Continuar?'):
                     return
+            self.project.settings.update(geometry=self.root.geometry(), profile=self.profile.get(), zoom=self.zoom.get(), preview=self.studio.preview, program=self.studio.program)
             self.project.save(path)
 
     def replace_project(self, project):
@@ -393,6 +447,16 @@ class App:
         self.runtime.close()
         self.runtime = replacement
         self.project, self.studio = project, Studio(project)
+        settings = project.settings
+        if 'geometry' in settings:
+            self.root.geometry(settings['geometry'])
+        if settings.get('profile') in {'Cinema', 'Suave', 'Dinâmico'}:
+            self.profile.set(settings['profile'])
+        self.zoom.set(max(1, min(4, float(settings.get('zoom', 2)))))
+        ids = {scene.id for scene in project.scenes}
+        for key in ('preview', 'program'):
+            if settings.get(key) in ids:
+                setattr(self.studio, key, settings[key])
         self.refresh_lists()
 
     def new(self):
@@ -587,6 +651,7 @@ class App:
             if channel:
                 meter.configure(value=channel.peak)
         errors = list(self.studio.compositor.errors.values())
+        errors += [plugin.error for plugin in self.studio.compositor.plugins.values() if plugin.error]
         errors += [decoder.error for decoder in list(self.runtime.video.values()) + list(self.runtime.audio.values()) if decoder.error]
         failures = []
         for name, output in list(self.runtime.outputs.items()):

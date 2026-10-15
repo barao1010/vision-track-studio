@@ -17,6 +17,10 @@ class DesktopTests(unittest.TestCase):
         app.studio.preview = scene.id
         app.refresh_lists()
         app.studio.take(__import__('time').monotonic(), .1)
+        def verify():
+            self.assertTrue(app.camera_view.winfo_ismapped())
+            self.assertGreater(app.program_view.winfo_width(), 100)
+        root.after(200, verify)
         root.after(500, app.close)
         root.mainloop()
         self.assertEqual(errors, [])

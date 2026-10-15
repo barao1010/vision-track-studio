@@ -4,3 +4,4 @@ opencv-python-headless==4.11.0.86
 pyserial==3.5
 playwright==1.55.0
 sounddevice==0.5.2
+PyAudioWPatch==0.2.12.7; sys_platform == 'win32'

@@ -28,7 +28,14 @@ class Source:
     settings: dict = field(default_factory=dict)
 
     def validate(self):
-        if self.kind not in {'color', 'image', 'text', 'video', 'rtsp', 'camera', 'desktop', 'window', 'microphone', 'audio', 'browser'}:
+        if not isinstance(self.settings, dict) or not isinstance(self.value, str):
+            raise ValueError('Configuração de fonte inválida')
+        for key in ('gain', 'brightness', 'contrast', 'chroma_threshold', 'gate_db', 'compressor_db', 'compressor_ratio', 'delay_ms'):
+            if key in self.settings and not math.isfinite(float(self.settings[key])):
+                raise ValueError('Parâmetro numérico inválido')
+        if any(not isinstance(value, int) or isinstance(value, bool) for value in (self.x, self.y, self.width, self.height)):
+            raise ValueError('Dimensões e coordenadas devem ser inteiras')
+        if self.kind not in {'color', 'image', 'text', 'video', 'rtsp', 'camera', 'desktop', 'window', 'microphone', 'audio', 'system_audio', 'browser'}:
             raise ValueError('Tipo de fonte inválido')
         if not self.name or not self.id:
             raise ValueError('Fonte sem nome ou identificador')
@@ -52,8 +59,11 @@ class Project:
     fps: int = 25
     scenes: list[Scene] = field(default_factory=lambda: [Scene('Cena 1')])
     schema: int = 1
+    settings: dict = field(default_factory=dict)
 
     def validate(self):
+        if not isinstance(self.settings, dict):
+            raise ValueError('Configuração de projeto inválida')
         if self.schema != 1:
             raise ValueError('Versão de projeto incompatível')
         if not (16 <= self.width <= 3840 and 16 <= self.height <= 2160 and 1 <= self.fps <= 60):
@@ -107,12 +117,13 @@ class Compositor:
         self.images = {}
         self.errors = {}
         self.fonts = {}
+        self.plugins = {}
 
     def render(self, scene, frames=None):
         canvas = Image.new('RGBA', (self.project.width, self.project.height), 'black')
         frames = frames or {}
         for source in scene.sources:
-            if not source.visible or source.kind in {'audio', 'microphone'}:
+            if not source.visible or source.kind in {'audio', 'microphone', 'system_audio'}:
                 continue
             try:
                 size = (source.width, source.height)
@@ -137,6 +148,10 @@ class Compositor:
                     if source.id not in frames:
                         raise ValueError('A aguardar vídeo')
                     layer = frames[source.id].convert('RGBA').resize(size)
+                from .effects import video_effects
+                layer = video_effects(layer, source.settings)
+                if source.id in self.plugins:
+                    layer = self.plugins[source.id].apply(layer, {'source_id': source.id, 'kind': source.kind})
                 if source.opacity != 1:
                     layer.putalpha(layer.getchannel('A').point(lambda value: round(value * source.opacity)))
                 canvas.alpha_composite(layer, (source.x, source.y))

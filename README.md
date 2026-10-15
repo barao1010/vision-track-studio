@@ -6,7 +6,8 @@ apenas o novo motor e a documentação; o histórico anterior não foi apagado.
 
 Implementa cenas/fontes, camadas, preview/programa, corte/fade, mixer de áudio,
 gravação A/V, RTMP, adaptadores de captura Windows, links web/CSS, deteção/seleção,
-recorte digital, protocolos PTZ, presets e joystick. A troca de câmeras é experimental.
+recorte digital, protocolos PTZ, presets, joystick, som do sistema WASAPI, filtros básicos
+e uma API própria de plugins de vídeo. A troca de câmeras é experimental.
 Leia os limites na [matriz de equivalência](docs/PARIDADE.md).
 
 ## Executar
@@ -21,7 +22,8 @@ python -m vtrack
 
 Adicione fontes e prepare a cena em Pré-visualização; use Corte ou Transição para enviar
 a Programa. A última fonte fica por cima. Vídeos com áudio criam um canal automaticamente;
-RTSP permite ativá-lo no botão de áudio. Microfone é uma fonte separada. Nome de dispositivo
+RTSP permite ativá-lo no botão de áudio. Som do sistema usa WASAPI no Windows
+e não pode ser usado com a monitorização ligada. Microfone é uma fonte separada. Nome de dispositivo
 DirectShow e título de janela devem corresponder exatamente ao Windows.
 
 Links web suportam transparência e CSS personalizado; não capturam áudio da página.

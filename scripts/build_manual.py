@@ -28,7 +28,7 @@ styles['BodyText'].fontName = 'VT'
 styles.add(ParagraphStyle(name='TitleVT', fontName='VT-Bold', fontSize=28, leading=34, textColor=colors.HexColor('#071a3d'), spaceAfter=18))
 styles.add(ParagraphStyle(name='SectionVT', fontName='VT-Bold', fontSize=16, leading=21, textColor=colors.HexColor('#1261a8'), spaceBefore=13, spaceAfter=9))
 styles['BodyText'].fontSize = 10
-styles['BodyText'].leading = 15
+styles['BodyText'].leading = 14
 styles['BodyText'].spaceAfter = 8
 story = []
 def p(text): story.append(Paragraph(text, styles['BodyText']))
@@ -57,14 +57,16 @@ screenshot = ROOT / 'assets/desktop.png'
 if screenshot.exists():
     image = ImageReader(str(screenshot))
     width, height = image.getSize()
-    story.append(Image(str(screenshot), width=500, height=500 * height / width))
+    story.append(Image(str(screenshot), width=420, height=420 * height / width))
     p('Captura da interface real em ambiente de teste. A aparência pode variar entre sistemas.')
 else:
     p('A captura da interface será acrescentada pelo workflow de empacotamento após o teste de arranque.')
 heading('Áudio e gravação')
 p('Vídeos com áudio criam um canal automaticamente. Em RTSP, use Áudio da fonte para ativar a faixa; câmera USB e microfone são fontes separadas. Liste os dispositivos para copiar o nome DirectShow exato. Os medidores mostram o sinal das fontes visíveis na cena em Programa, incluindo a transição.')
 p('Selecione a fonte para controlar volume e mute. Monitorizar áudio liga a reprodução no dispositivo de saída padrão; use auscultadores para evitar retorno. Gravar MKV grava vídeo e áudio AAC. A transmissão usa URL RTMP completa e requer encoder libx264 no FFmpeg externo.')
-p('As saídas usam um relógio comum para manter a cadência mesmo quando a imagem não muda. A sincronização de captura entre fontes físicas ainda precisa de medição e calibração. Não há captura de áudio do sistema por loopback nesta edição.')
+p('As saídas usam um relógio comum para manter a cadência mesmo quando a imagem não muda. A sincronização de captura entre fontes físicas ainda precisa de medição e calibração. Som do sistema (WASAPI) captura a saída padrão do Windows. A monitorização e essa fonte não podem estar ativas em simultâneo para evitar retorno. O adaptador depende de validação física.')
+heading('Filtros e plugins')
+p('Filtros A/V oferece brilho, contraste, chroma key, gate, compressor e atraso de áudio de 0 a 2000 ms. Os filtros são básicos, sem equivalência com uma cadeia avançada de produção. Plugin de vídeo carrega explicitamente um ficheiro Python da API própria; clique novamente para o remover. Plugins binários de outros motores não são compatíveis. Só execute plugins em que confia.')
 heading('Links e CSS')
 p('Adicione uma fonte Link web / CSS e introduza um endereço HTTP/HTTPS. Editar fonte / CSS abre o editor. O fundo transparente é preservado. A implementação obtém imagens do Chromium; não transporta o áudio da página e não tem equivalência completa com fontes web de outros motores.')
 story.append(PageBreak())
@@ -80,7 +82,7 @@ heading('Troca de câmeras')
 p('Ative deteção nas fontes pretendidas, volte à fonte principal e selecione a pessoa. A opção experimental procura uma correspondência única em outra câmera, exige cinco amostras novas e aplica intervalo mínimo entre trocas. Substitui a imagem da fonte principal pela câmera escolhida; não troca automaticamente o áudio nem liga o PTZ da próxima câmera.')
 heading('Projetos, créditos e limitações')
 p('Guarde projetos em JSON. Endereços de fontes podem conter palavras-passe e chaves em texto; o aplicativo pede confirmação antes de os guardar. Projetos da base anterior não são compatíveis automaticamente.')
-p('Dependências: Python/Tk, Pillow (MIT-CMU), NumPy (BSD), OpenCV (Apache-2.0 e componentes de terceiros), Playwright (Apache-2.0/Chromium e terceiros), pyserial (BSD), sounddevice (MIT/PortAudio) e FFmpeg externo, cuja licença depende da compilação. Consulte docs/DEPENDENCIAS.md e os avisos distribuídos com cada componente.')
-p('Consulte docs/PARIDADE.md: ainda faltam testes físicos, loopback de áudio, filtros avançados, compatibilidade de plugins, migração de projetos e validação prolongada de desempenho. Esta documentação não declara equivalência total nem aprovação de produção.')
+p('Dependências: Python/Tk, Pillow (MIT-CMU), NumPy (BSD), OpenCV (Apache-2.0 e componentes de terceiros), Playwright (Apache-2.0/Chromium e terceiros), pyserial (BSD), sounddevice e PyAudioWPatch (MIT/PortAudio) e FFmpeg externo, cuja licença depende da compilação. Consulte docs/DEPENDENCIAS.md e os avisos distribuídos com cada componente.')
+p('Consulte docs/PARIDADE.md: ainda faltam testes físicos, validação de loopback e filtros, compatibilidade de plugins, migração de projetos e validação prolongada de desempenho. Esta documentação não declara equivalência total nem aprovação de produção.')
 SimpleDocTemplate(str(OUT), title='Vision Track Studio - Manual da base independente', author='Vision Track Studio', pagesize=(595.28, 841.89), rightMargin=45, leftMargin=45, topMargin=40, bottomMargin=56).build(story, onFirstPage=footer, onLaterPages=footer)
 print(OUT)

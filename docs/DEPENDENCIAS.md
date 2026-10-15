@@ -12,6 +12,7 @@ de processo clean-room nem uma auditoria jurídica.
 | OpenCV headless | HOG/histogramas | Apache-2.0 e licenças de componentes da wheel |
 | Playwright / Chromium | Fontes web | Apache-2.0 e avisos Chromium/terceiros |
 | pyserial | Portas série PTZ | BSD |
+| PyAudioWPatch / PortAudio | Som do sistema WASAPI no Windows | MIT e avisos PortAudio |
 | sounddevice / PortAudio | Monitorização | MIT e avisos PortAudio incluídos |
 | FFmpeg | Executável externo | Não redistribuído; licença depende da compilação/codecs |
 | PyInstaller | Empacotamento | GPL com exceção do bootloader e partes Apache-2.0 |

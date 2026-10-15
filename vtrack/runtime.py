@@ -1,7 +1,7 @@
 """Own runtime connecting media, audio, tracking and output resources."""
 import threading
 import time
-from .audio import Mixer, AudioCapture
+from .audio import Mixer, AudioCapture, SystemCapture
 from .capture import video_input, audio_input, WebSource
 from .media import Decoder
 from .vision import VisionWorker, CameraRouter
@@ -57,8 +57,8 @@ class Runtime:
             elif source.kind in {'video', 'rtsp', 'camera', 'desktop', 'window'}:
                 self.video[source.id] = Decoder(source.value, (source.width, source.height),
                     input_args=video_input(source.kind, source.value, fps))
-            if source.kind in {'audio', 'microphone'} or source.settings.get('audio', source.kind == 'video'):
-                capture = AudioCapture(audio_input(source.kind, source.value))
+            if source.kind in {'audio', 'microphone', 'system_audio'} or source.settings.get('audio', source.kind == 'video'):
+                capture = SystemCapture() if source.kind == 'system_audio' else AudioCapture(audio_input(source.kind, source.value))
                 self.audio[source.id] = capture
                 self.mixer.add(source.id, capture.buffer)
         except Exception:
@@ -120,6 +120,7 @@ class Runtime:
                     channel.active = source.id in active
                     channel.gain = source.settings.get('gain', 1.) * active.get(source.id, 0)
                     channel.muted = source.settings.get('mute', False)
+                    channel.settings = dict(source.settings)
 
     def add_output(self, key, output):
         with self.lock:

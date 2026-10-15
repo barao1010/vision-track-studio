@@ -42,6 +42,8 @@ class Channel:
     active: bool = True
     peak: float = 0.0
     rms: float = 0.0
+    settings: dict = field(default_factory=dict)
+    effects: object = None
 
 
 class Mixer:
@@ -53,7 +55,8 @@ class Mixer:
 
     def add(self, key, buffer):
         with self.lock:
-            self.channels[key] = Channel(buffer)
+            from .effects import AudioEffects
+            self.channels[key] = Channel(buffer, effects=AudioEffects())
 
     def remove(self, key):
         with self.lock:
@@ -67,8 +70,10 @@ class Mixer:
             block = channel.buffer.pull(count)
             # Always drain inactive sources, so scene changes do not replay stale audio.
             if channel.muted or not channel.active:
+                channel.effects.apply(np.zeros_like(block), channel.settings)
                 channel.peak = channel.rms = 0.0
                 continue
+            block = channel.effects.apply(block, channel.settings)
             block *= max(0, min(4, channel.gain))
             channel.peak = float(np.max(np.abs(block))) if count else 0.0
             channel.rms = float(np.sqrt(np.mean(block * block))) if count else 0.0
@@ -127,3 +132,53 @@ class Monitor:
     def close(self):
         self.stream.stop()
         self.stream.close()
+
+
+class SystemCapture:
+    """Explicit WASAPI loopback source, converted to the mixer rate."""
+    def __init__(self):
+        import os
+        if os.name != 'nt':
+            raise RuntimeError('Captura do som do sistema requer Windows/WASAPI')
+        import pyaudiowpatch as pa
+        self.api = pa.PyAudio()
+        self.buffer = PCMBuffer()
+        self.error = None
+        self.stop = threading.Event()
+        try:
+            info = self.api.get_default_wasapi_loopback()
+            self.rate = int(info['defaultSampleRate'])
+            self.channels = min(2, int(info['maxInputChannels']))
+            if self.channels < 1:
+                raise RuntimeError('Dispositivo loopback sem canais')
+            self.stream = self.api.open(format=pa.paFloat32, channels=self.channels, rate=self.rate,
+                input=True, input_device_index=info['index'], frames_per_buffer=max(1, self.rate // 50))
+        except Exception:
+            self.api.terminate()
+            raise
+        self.worker = threading.Thread(target=self._read, daemon=True)
+        self.worker.start()
+
+    def _read(self):
+        try:
+            count = max(1, self.rate // 50)
+            while not self.stop.is_set():
+                data = self.stream.read(count, exception_on_overflow=False)
+                block = np.frombuffer(data, dtype='<f4').reshape(-1, self.channels)
+                if self.channels == 1:
+                    block = np.repeat(block, 2, axis=1)
+                if self.rate != RATE:
+                    # Fixed 20 ms blocks; output and input rates are integral here.
+                    positions = np.linspace(0, len(block) - 1, 960)
+                    block = np.column_stack([np.interp(positions, np.arange(len(block)), block[:, channel]) for channel in range(2)])
+                self.buffer.push(block)
+        except Exception as error:
+            if not self.stop.is_set():
+                self.error = f'WASAPI: {type(error).__name__}'
+
+    def close(self):
+        self.stop.set()
+        self.stream.stop_stream()
+        self.worker.join(timeout=2)
+        self.stream.close()
+        self.api.terminate()
