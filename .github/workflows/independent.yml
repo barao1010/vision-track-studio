@@ -1,0 +1,23 @@
+name: Independent engine
+on:
+  push:
+    branches: [independent-engine]
+  pull_request:
+    branches: [independent-engine]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Install external FFmpeg for tests
+        run: choco install ffmpeg --no-progress -y
+      - name: Engine and real video tests
+        run: python -m unittest discover -s tests -v
+      - name: Desktop startup smoke test
+        run: python -c "import tkinter as tk; from vtrack.app import App; root=tk.Tk(); app=App(root); root.after(1500, app.close); root.mainloop()"

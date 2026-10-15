@@ -1,45 +1,38 @@
-![Vision Track Studio](assets/vision-track-logo.svg)
+# Vision Track Studio — base independente
 
-# Vision Track Studio
+Versão 0.2.0-dev.1. Motor novo em Python, Pillow e FFmpeg externo, com interface desktop
+própria em grafite/azul. Esta branch contém apenas a nova implementação e sua documentação.
+A versão anterior continua em `main`.
 
-Aplicação Windows para produção de vídeo, gravação, transmissão e rastreio PTZ por IA.
+**Em desenvolvimento: não tem ainda a mesma funcionalidade completa da versão anterior.**
+Consulte [a matriz de equivalência](docs/PARIDADE.md) antes de testar.
 
-## Estado verificável
+## Executar
 
-O código do painel nativo, o worker de rastreio, as alterações de identidade e o pipeline de instalador estão neste repositório. A compilação publica uma **pré-release experimental** apenas depois dos testes do controlador, build Windows e teste de arranque. Consulte [Actions](https://github.com/barao1010/vision-track-studio/actions) e [Releases](https://github.com/barao1010/vision-track-studio/releases) para saber se há binários concluídos.
+Instale Python 3.12 com Tk e FFmpeg no PATH (ou defina VISION_TRACK_FFMPEG).
 
-Não é uma versão final validada para produção. Áudio, transmissão, plugins, UI e PTZ físico precisam de testes no Windows e com câmeras reais.
+```sh
+python -m pip install -r requirements.txt
+python -m vtrack
+```
 
-## Implementado no código
+Escolha/crie uma cena, adicione fontes e configure posição/tamanho. A última fonte da lista
+fica por cima das restantes. Selecione outra cena e use Corte ou Transição para enviar ao
+Programa. Guarde projetos em JSON. RTSP com credenciais é guardado em texto apenas após
+confirmação na interface. Não partilhe projetos que contenham palavras-passe.
 
-- Cenas, fontes, mixer, gravação, transmissão e fontes de navegador.
-- Painel nativo com vídeo RTSP, serviço ONVIF, credenciais e seleção do alvo por retângulo.
-- Botão de parar; interrupção do rastreio quando o alvo é perdido ou a aparência diverge.
-- Detector de pessoas por IA (YOLOX/OpenCV Zoo), CSRT e comparação de aparência. A seleção exige uma pessoa distinta; a associação interrompe movimentos em casos ambíguos. Não faz identificação biométrica.
-- Identidade no título, metadados Windows, executável, bandeja, ícones, instalador e tela Sobre; configurações próprias.
-- Instalador Windows, pacote portable e código-fonte correspondente na pré-release.
-- Canal próprio de atualização manual nas Releases.
+Gravar MKV grava o Programa **sem áudio**. Transmitir RTMP também envia apenas vídeo e
+necessita libx264 no FFmpeg escolhido; não foi validado contra um serviço real.
+O botão muda para Parar enquanto a saída está ativa. Erros de codificação são reportados.
 
-## Ainda pendente
+## Verificação
 
-Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, recorte digital automático de fontes fixas, troca de alvo entre câmeras e joystick físico, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
+```sh
+python -m unittest discover -s tests -v
+```
 
-## Compilar
+A suite verifica pixels, transições, persistência, perda/recuperação de identidade por dados
+sintéticos e criação/descodificação de vídeo real. Não comprova funcionamento com câmeras.
+O workflow Windows valida arranque Tk e executa a suite; não publica um instalador final.
 
-O workflow fixa a base OBS em `f082210c177a03572cace88c168d0f32d8cde39e`, incluindo submódulos, com checkout superficial. No Windows com as ferramentas oficiais do OBS:
-
-1. Obtenha essa revisão com submódulos.
-2. Execute `python scripts/brand_windows.py CAMINHO_OBS` e `python scripts/integrate_studio.py CAMINHO_OBS` neste repositório.
-3. Dentro da base OBS, execute `cmake --preset windows-x64 "-DOBS_VERSION_OVERRIDE=33.0.0-rc1-vts-preview"` e `cmake --build --preset windows-x64 --config RelWithDebInfo`.
-4. O workflow documenta o empacotamento do worker e do instalador.
-
-Veja [Uso do PTZ](tracking/USO-PTZ.md).
-
-## Licença
-
-OBS Studio é GPL-2.0-ou-posterior. As alterações nativas usam GPL-2.0-ou-posterior. O worker de rastreio combinado é distribuído sob GPLv3, com licenças Apache-2.0 preservadas; veja tracking/LICENSES.md. Preserve autoria, COPYING e licenças de terceiros. O pacote Source exporta a base modificada, submódulos e scripts correspondentes; as dependências mantêm suas próprias licenças.
-
-
-## Integração do rastreio Vision Track AI
-
-Portados para o worker nativo: seleção persistente, referência de aparência fixa, confirmação em vários quadros após perda/ambiguidade, perfis Cinema/Suave/Dinâmico e composição com margem acima do corpo. Adicionados VISCA IP, VISCA Serial, Pelco-D, setas, zoom manual, presets e posição inicial. O detector continua YOLOX, enquanto o app anterior usa COCO-SSD; a paridade de recursos não é completa. Zoom digital automático, várias câmeras e joystick físico permanecem pendentes. Protocolos e comportamento físico exigem validação nas câmeras reais.
+[Dependências e créditos](docs/DEPENDENCIAS.md) · [Recursos e limitações](docs/PARIDADE.md)

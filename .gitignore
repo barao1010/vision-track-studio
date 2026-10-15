@@ -1,5 +1,8 @@
-upstream-obs/
-build_*/
-.vs/
-*.exe
-*.msi
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.spec
+*.mkv
+*.vtrack.json
