@@ -23,7 +23,7 @@ def similarity(a, b):
 
 
 class TargetLock:
-    """Explicit selection; uncertainty stops motion; identity never silently swaps."""
+    """Explicit selection; uncertainty suspends motion; reference appearance stays fixed."""
     def __init__(self, confirmations=3, threshold=.85, margin=.12):
         self.confirmations = confirmations
         self.threshold = threshold
@@ -33,15 +33,17 @@ class TargetLock:
         self.streak = 0
         self.state = 'unselected'
         self.target = None
+        self.recovery_required = confirmations
 
     def select(self, detection):
-        if not detection.signature:
+        if not detection.signature or not all(math.isfinite(value) for value in detection.signature) or sum(value * value for value in detection.signature) < 1e-12:
             raise ValueError('Seleção sem assinatura')
         self.reference = detection.signature
         self.target = detection
         self.state = 'locked'
         self.streak = 0
         self.pending = None
+        self.recovery_required = self.confirmations
 
     def update(self, detections):
         if self.reference is None:
@@ -49,11 +51,23 @@ class TargetLock:
         ranked = sorted(((similarity(self.reference, d.signature), d) for d in detections), key=lambda item: item[0], reverse=True)
         uncertain = not ranked or ranked[0][0] < self.threshold or (len(ranked) > 1 and ranked[0][0] - ranked[1][0] < self.margin)
         if uncertain:
-            self.state = 'ambiguous' if len(ranked) > 1 else 'lost'
+            ambiguous = len(ranked) > 1
+            self.state = 'ambiguous' if ambiguous else 'lost'
+            if ambiguous:
+                self.recovery_required = max(self.confirmations, 5)
             self.target = self.pending = None
             self.streak = 0
             return None
         candidate = ranked[0][1]
+        if self.state == 'locked' and self.target is not None:
+            previous = self.target.box
+            current = candidate.box
+            distance = math.hypot(current[0] + current[2] / 2 - previous[0] - previous[2] / 2, current[1] + current[3] / 2 - previous[1] - previous[3] / 2)
+            area_ratio = (current[2] * current[3]) / max(1e-9, previous[2] * previous[3])
+            if distance > .18 or not .35 <= area_ratio <= 2.8:
+                self.state = 'lost'
+                self.target = None
+                self.streak = 0
         if self.state != 'locked':
             # Spatial continuity across recovery frames prevents combining different people.
             if self.pending:
@@ -62,10 +76,11 @@ class TargetLock:
                     self.streak = 0
             self.pending = candidate
             self.streak += 1
-            if self.streak < self.confirmations:
+            if self.streak < self.recovery_required:
                 self.state = 'recovering'
                 return None
         self.state, self.target = 'locked', candidate
+        self.recovery_required = self.confirmations
         self.pending = None
         self.streak = 0
         return candidate

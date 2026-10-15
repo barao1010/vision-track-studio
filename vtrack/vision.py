@@ -26,14 +26,17 @@ def signature(frame, box):
 
 
 class VisionWorker:
-    def __init__(self, provider):
+    def __init__(self, provider, size=416):
         self.provider = provider
+        self.input_size = size
         self.lock = TargetLock(threshold=.9, margin=.08)
         self.framer = DigitalFramer()
         self.detections = []
         self.target = None
         self.timestamp = 0
         self.error = None
+        self.detector_name = 'A iniciar detector'
+        self.generation = 0
         self.mutex = threading.Lock()
         self.stop = threading.Event()
         self.worker = threading.Thread(target=self._run, daemon=True)
@@ -42,8 +45,12 @@ class VisionWorker:
     def _run(self):
         try:
             import cv2
-            hog = cv2.HOGDescriptor()
-            hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+            from .detector import PersonDetector, HOGDetector
+            try:
+                detector = PersonDetector(size=self.input_size)
+            except FileNotFoundError:
+                detector = HOGDetector()
+            self.detector_name = detector.name
             previous = None
             while not self.stop.wait(.12):
                 frame, captured = self.provider()
@@ -56,39 +63,38 @@ class VisionWorker:
                 if captured == previous:
                     continue
                 previous = captured
-                small = frame.copy()
-                small.thumbnail((640, 480))
-                if small.width < 64 or small.height < 128:
-                    continue
-                bgr = cv2.cvtColor(np.asarray(small), cv2.COLOR_RGB2BGR)
-                boxes, weights = hog.detectMultiScale(bgr, winStride=(8, 8), padding=(8, 8), scale=1.05)
-                detections = []
-                for (x, y, width, height), weight in zip(boxes, weights):
-                    box = (x / small.width, y / small.height, width / small.width, height / small.height)
-                    detections.append(Detection(box, signature(frame, box), float(weight)))
+                generation = self.generation
+                predictions = detector.detect(frame)
+                detections = [Detection(box, signature(frame, box), confidence) for box, confidence in predictions]
                 with self.mutex:
+                    if generation != self.generation:
+                        continue
                     self.detections = detections
                     self.target = self.lock.update(detections)
-                    self.timestamp = now
+                    self.timestamp = captured
         except Exception as error:
             self.error = f'Detector indisponível: {type(error).__name__}'
 
     def select_at(self, x, y):
         with self.mutex:
             candidates = [d for d in self.detections if d.box[0] <= x <= d.box[0] + d.box[2] and d.box[1] <= y <= d.box[1] + d.box[3]]
+            if time.monotonic() - self.timestamp > .6:
+                raise ValueError('Imagem de deteção antiga; aguarde um quadro recente')
             if not candidates:
                 raise ValueError('Clique numa pessoa dentro de uma caixa de deteção')
             chosen = min(candidates, key=lambda d: d.box[2] * d.box[3])
+            self.generation += 1
             self.lock.select(chosen)
             self.target = chosen
 
     def snapshot(self):
         with self.mutex:
             target = self.target if time.monotonic() - self.timestamp < .6 else None
-            return list(self.detections), target, self.lock.state, self.lock.reference, self.timestamp
+            return (list(self.detections) if time.monotonic() - self.timestamp < .6 else []), target, self.lock.state, self.lock.reference, self.timestamp
 
     def adopt(self, reference):
         with self.mutex:
+            self.generation += 1
             self.lock.reference = reference
             self.lock.state = 'lost'
             self.lock.target = self.target = None

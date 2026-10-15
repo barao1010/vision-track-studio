@@ -40,3 +40,24 @@ class TrackingTests(unittest.TestCase):
         self.assertEqual(framer.update(None, .04), crop)
         with self.assertRaises(ValueError):
             framer.update(None, float('nan'))
+
+
+class ContinuityTests(unittest.TestCase):
+    def test_locked_identity_cannot_jump_across_frame_immediately(self):
+        lock = TargetLock()
+        original = Detection((.1, .1, .1, .2), (1, 0))
+        distant = Detection((.8, .1, .1, .2), (1, 0))
+        lock.select(original)
+        self.assertIsNone(lock.update([distant]))
+        self.assertIsNone(lock.update([distant]))
+        self.assertEqual(lock.update([distant]), distant)
+
+    def test_ambiguous_recovery_requires_five_frames(self):
+        lock = TargetLock()
+        target = Detection((.1, .1, .1, .2), (1, 0))
+        similar = Detection((.12, .1, .1, .2), (.99, .01))
+        lock.select(target)
+        self.assertIsNone(lock.update([target, similar]))
+        for _ in range(4):
+            self.assertIsNone(lock.update([target]))
+        self.assertEqual(lock.update([target]), target)

@@ -22,7 +22,7 @@ Release final nem uma implementação equivalente completa. O histórico foi pre
 | Saída A/V com cadência própria | Integrada | Gravação real e RTMP local testados com ambas as faixas |
 | Gravação MKV / RTMP | Integrada | FFmpeg externo; serviço de transmissão real não testado |
 | Links web transparentes / CSS | Integrado via Chromium | Transparência e CSS testados em servidor local; sem áudio web |
-| Deteção de pessoas / seleção | Integrada via HOG/OpenCV | Sem benchmark de pessoas reais; inferior a modelos modernos em vários cenários |
+| Deteção de pessoas / seleção | Integrada via YOLOX/OpenCV DNN; fallback HOG | Modelo verificado por SHA-256; inferência numa imagem pública OpenCV; sem benchmark de vídeo físico |
 | Referência persistente / confirmação de recuperação | Integrada | Testes sintéticos de perda, cruzamento e recuperação; não garante identidade real |
 | Cinema/Suave/Dinâmico e recorte digital | Integrado | Testes de enquadramento dentro da imagem; qualidade física não validada |
 | Troca automática entre câmeras | Experimental e desativada inicialmente | Cinco amostras novas, unicidade e cooldown; apenas imagem, não áudio/PTZ |
@@ -39,7 +39,7 @@ Release final nem uma implementação equivalente completa. O histórico foi pre
   perda de sinal, recuperação e comportamento de comandos em cada protocolo/modelo.
 - Validação física de loopback, áudio de páginas web, filtros avançados, monitorização
   por fonte e compensação automática de relógios de captura. O atraso de áudio é manual.
-- Detector/associação avançados e testes de oclusão/cruzamento reais. HOG e histograma
+- Detector/associação avançados e testes de oclusão/cruzamento reais. YOLOX e histograma
   de aparência não têm a mesma qualidade de sistemas avançados de rastreio.
 - Encaminhamento de áudio e PTZ por câmera durante handoff. A troca atual substitui a
   imagem da fonte original; mudar de câmera interrompe o PTZ até configuração explícita.

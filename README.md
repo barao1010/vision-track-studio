@@ -17,6 +17,7 @@ Instale Python 3.12 com Tk e FFmpeg no PATH ou configure VISION_TRACK_FFMPEG.
 ```sh
 python -m pip install -r requirements.txt
 python -m playwright install chromium
+python -m scripts.fetch_models
 python -m vtrack
 ```
 
@@ -32,7 +33,8 @@ Não são incluídos executáveis FFmpeg no pacote; instale uma compilação ade
 
 Selecione uma fonte de vídeo e clique Detetar; clique numa caixa para selecionar uma pessoa.
 PTZ automático, recorte e troca de câmeras são opções explícitas. Os protocolos e joystick
-precisam de validação com hardware real; deteção por HOG/cores não garante identidade.
+precisam de validação com hardware real; deteção por YOLOX e associação por aparência não garantem identidade. HOG é apenas fallback
+quando o modelo não está instalado.
 
 ## Verificar / empacotar
 

@@ -6,3 +6,4 @@ build/
 *.spec
 *.mkv
 *.vtrack.json
+models/*.onnx

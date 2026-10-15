@@ -76,12 +76,14 @@ class Runtime:
         if self.selected_camera == key:
             self.selected_camera = None
 
-    def enable_vision(self, key):
+    def enable_vision(self, key, size=416):
         if key not in self.video:
             raise ValueError('Selecione uma fonte de vídeo')
+        if key in self.vision and self.vision[key].input_size != size:
+            self.vision.pop(key).close()
         if key not in self.vision:
             decoder = self.video[key]
-            self.vision[key] = VisionWorker(lambda: (decoder.frame(), decoder.timestamp))
+            self.vision[key] = VisionWorker(lambda: (decoder.frame(), decoder.timestamp), size=size)
         self.selected_camera = key
         self.routed_source = key
 

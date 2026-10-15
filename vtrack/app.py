@@ -100,7 +100,7 @@ class App:
         menu_button.pack(fill='x', pady=3)
         actions_button = ttk.Menubutton(sources, text='Ações da fonte')
         actions_menu = tk.Menu(actions_button, tearoff=False)
-        for label, fn in [('Editar fonte / CSS', self.edit_value), ('Posição / tamanho', self.edit_transform), ('Filtros A/V', self.edit_effects), ('Plugin de vídeo', self.load_plugin),
+        for label, fn in [('Editar fonte / CSS', self.edit_value), ('Posição / tamanho', self.edit_transform), ('Filtros A/V', self.edit_effects), ('Plugin de vídeo', self.load_plugin), ('Qualidade do detector', self.detector_quality),
             ('Mostrar / ocultar', self.toggle_source), ('Subir camada', self.raise_source), ('Remover', self.remove_source)]:
             actions_menu.add_command(label=label, command=lambda action=fn: self.guard(action))
         actions_button.configure(menu=actions_menu)
@@ -506,7 +506,22 @@ class App:
         source = self.selected_source()
         if source:
             self.follow.set(False)
-            self.runtime.enable_vision(source.id)
+            self.runtime.enable_vision(source.id, int(source.settings.get('detection_size', 416)))
+
+    def detector_quality(self):
+        source = self.selected_source()
+        if not source:
+            return
+        side = simpledialog.askinteger('Deteção', '320: rápido | 416: equilibrado | 640: qualidade.\nUm detector lento suspende o PTZ por falta de quadros recentes.', initialvalue=int(source.settings.get('detection_size', 416)))
+        if side is None:
+            return
+        if side not in {320, 416, 640}:
+            raise ValueError('Use 320, 416 ou 640')
+        source.settings['detection_size'] = side
+        self.follow.set(False)
+        self.manual_stop()
+        if source.id in self.runtime.vision:
+            self.runtime.enable_vision(source.id, side)
 
     def select_person(self, event):
         worker = self.runtime.vision.get(self.runtime.selected_camera)
@@ -581,7 +596,7 @@ class App:
         target = None
         if worker:
             detections, target, state, _, stamp = worker.snapshot()
-            self.tracker_status.set(worker.error or f'{state} | clique numa caixa para selecionar')
+            self.tracker_status.set(worker.error or f'{state} | {worker.detector_name}')
             decoder = self.runtime.video.get(key)
             frame = decoder.frame() if decoder else None
             if frame:
@@ -607,7 +622,7 @@ class App:
             elif self.manual is not None:
                 self.ptz.move(*self.manual)
             elif self.follow.get():
-                if target and now - stamp < .3:
+                if target and now - stamp < .6:
                     x, y, width, height = target.box
                     gain = {'Cinema': .4, 'Suave': .65, 'Dinâmico': 1.}[self.profile.get()]
                     pan, tilt = x + width / 2 - .5, .5 - y - height / 2

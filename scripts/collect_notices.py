@@ -16,3 +16,6 @@ for distribution in distributions():
 python_license = Path(__import__('sys').base_prefix) / 'LICENSE.txt'
 if python_license.exists():
     shutil.copyfile(python_license, root / 'Python-LICENSE.txt')
+
+for path in Path('models').glob('LICENSE*'):
+    shutil.copyfile(path, root / path.name)
