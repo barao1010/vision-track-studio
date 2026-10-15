@@ -1,38 +1,47 @@
-# Vision Track Studio — base independente
+# Vision Track Studio - base independente
 
-Versão 0.2.0-dev.1. Motor novo em Python, Pillow e FFmpeg externo, com interface desktop
-própria em grafite/azul. Esta branch contém apenas a nova implementação e sua documentação.
-A versão anterior continua em `main`.
+**0.2.0-dev.2, em desenvolvimento. Ainda não tem equivalência completa nem aprovação
+para uso em produção.** A versão anterior permanece em main. Esta árvore contém
+apenas o novo motor e a documentação; o histórico anterior não foi apagado.
 
-**Em desenvolvimento: não tem ainda a mesma funcionalidade completa da versão anterior.**
-Consulte [a matriz de equivalência](docs/PARIDADE.md) antes de testar.
+Implementa cenas/fontes, camadas, preview/programa, corte/fade, mixer de áudio,
+gravação A/V, RTMP, adaptadores de captura Windows, links web/CSS, deteção/seleção,
+recorte digital, protocolos PTZ, presets e joystick. A troca de câmeras é experimental.
+Leia os limites na [matriz de equivalência](docs/PARIDADE.md).
 
 ## Executar
 
-Instale Python 3.12 com Tk e FFmpeg no PATH (ou defina VISION_TRACK_FFMPEG).
+Instale Python 3.12 com Tk e FFmpeg no PATH ou configure VISION_TRACK_FFMPEG.
 
 ```sh
 python -m pip install -r requirements.txt
+python -m playwright install chromium
 python -m vtrack
 ```
 
-Escolha/crie uma cena, adicione fontes e configure posição/tamanho. A última fonte da lista
-fica por cima das restantes. Selecione outra cena e use Corte ou Transição para enviar ao
-Programa. Guarde projetos em JSON. RTSP com credenciais é guardado em texto apenas após
-confirmação na interface. Não partilhe projetos que contenham palavras-passe.
+Adicione fontes e prepare a cena em Pré-visualização; use Corte ou Transição para enviar
+a Programa. A última fonte fica por cima. Vídeos com áudio criam um canal automaticamente;
+RTSP permite ativá-lo no botão de áudio. Microfone é uma fonte separada. Nome de dispositivo
+DirectShow e título de janela devem corresponder exatamente ao Windows.
 
-Gravar MKV grava o Programa **sem áudio**. Transmitir RTMP também envia apenas vídeo e
-necessita libx264 no FFmpeg escolhido; não foi validado contra um serviço real.
-O botão muda para Parar enquanto a saída está ativa. Erros de codificação são reportados.
+Links web suportam transparência e CSS personalizado; não capturam áudio da página.
+Gravação MKV usa vídeo MPEG-4 + áudio AAC. RTMP usa libx264 e AAC do FFmpeg externo.
+Não são incluídos executáveis FFmpeg no pacote; instale uma compilação adequada.
 
-## Verificação
+Selecione uma fonte de vídeo e clique Detetar; clique numa caixa para selecionar uma pessoa.
+PTZ automático, recorte e troca de câmeras são opções explícitas. Os protocolos e joystick
+precisam de validação com hardware real; deteção por HOG/cores não garante identidade.
+
+## Verificar / empacotar
 
 ```sh
 python -m unittest discover -s tests -v
 ```
 
-A suite verifica pixels, transições, persistência, perda/recuperação de identidade por dados
-sintéticos e criação/descodificação de vídeo real. Não comprova funcionamento com câmeras.
-O workflow Windows valida arranque Tk e executa a suite; não publica um instalador final.
+Defina VISION_TRACK_TEST_WEB=1 e VISION_TRACK_TEST_RTMP=1 para testes locais de navegador
+e RTMP. Os testes de interface requerem ambiente gráfico. O workflow Windows executa estes
+testes, gera captura real da interface e manual, empacota com PyInstaller e Inno Setup e
+verifica o arranque do executável. Os pacotes são **artefactos de desenvolvimento**, não
+uma Release final. Não há publicação automática de uma versão estável.
 
-[Dependências e créditos](docs/DEPENDENCIAS.md) · [Recursos e limitações](docs/PARIDADE.md)
+[Manual](docs/Vision-Track-Studio-Manual-PT.pdf) · [Dependências](docs/DEPENDENCIAS.md)

@@ -1,34 +1,49 @@
-# Critérios de equivalência
+# Estado da equivalência - 0.2.0-dev.2
 
-Esta é uma implementação nova em desenvolvimento, não uma versão equivalente completa.
-Não inclui fontes, patches, bibliotecas nem plugins do motor anterior na árvore atual.
-O histórico do repositório é preservado; esta separação de código não apaga a origem histórica.
+A nova base tem código próprio e uma árvore separada da versão anterior. Não é uma
+Release final nem uma implementação equivalente completa. O histórico foi preservado.
 
-| Recurso | Estado da base independente | Evidência / requisito restante |
+| Recurso | Implementação atual | Validação / limite |
 |---|---|---|
-| Cenas, ordem de fontes, posição, tamanho, opacidade, visibilidade | Implementado | Testes de composição e persistência |
-| Imagem, texto, cor | Implementado | Testes por pixels; interface a validar no Windows |
-| Vídeo local | Implementado | Codificação e descodificação de ficheiro real em teste |
-| RTSP | Adaptador implementado | Sem teste de rede/câmera física |
-| Preview/programa, corte, fade | Implementado | Testes incluindo transição interrompida |
-| Gravação MKV | Implementado, apenas vídeo | MPEG-4 através de FFmpeg externo; sem áudio nesta etapa |
-| RTMP | Adaptador implementado, apenas vídeo | Sem validação com serviço de transmissão; encoder externo necessário |
-| Identidade persistente e recuperação confirmada | Algoritmo implementado | Testes sintéticos; detector e integração visual pendentes |
-| Perfis Cinema/Suave/Dinâmico e recorte digital | Algoritmo implementado | Testes de limites; integração visual pendente |
-| Múltiplas câmeras / troca automática | Pendente | Fontes RTSP simultâneas não equivalem a troca inteligente |
-| ONVIF, VISCA IP/Serial, Pelco-D e presets | Pendente | Reimplementação de protocolos, watchdog e testes de hardware |
-| Joystick físico | Pendente | Mapeamento, calibração, desconexão segura |
-| Captura USB/tela/janelas e áudio | Pendente | Adaptadores nativos Windows |
-| Mixer, sincronização A/V, monitorização e filtros | Pendente | Motor de áudio e relógio comum |
-| Browser source e plugins | Pendente | Sem compatibilidade automática com plugins anteriores |
-| Instalador, assinatura e manual final | Pendente | Não é uma Release pronta |
+| Cenas, fontes, camadas, posição, tamanho, opacidade e visibilidade | Integrado à interface | Testes de pixels e persistência |
+| Preview/Programa, corte, fade | Integrado | Testes incluindo fade interrompido |
+| Vídeo local e RTSP | Integrado | Ficheiro real testado; rede RTSP física não testada |
+| Câmera USB, ecrã, janela | Adaptadores DirectShow/GDI integrados | Requer Windows e nomes exatos; hardware pendente |
+| Microfone / áudio de dispositivo | Adaptador DirectShow integrado | Hardware pendente |
+| Áudio automático de vídeo e RTSP opcional | Integrado | Fontes são descodificadas separadamente do vídeo |
+| Mixer por fonte, volume, mute e medidores | Integrado | Testes de ganho, mute, gating por cena e saturação |
+| Monitorização de áudio | Integrada via PortAudio | Dispositivo físico não testado |
+| Saída A/V com cadência própria | Integrada | Gravação real e RTMP local testados com ambas as faixas |
+| Gravação MKV / RTMP | Integrada | FFmpeg externo; serviço de transmissão real não testado |
+| Links web transparentes / CSS | Integrado via Chromium | Transparência e CSS testados em servidor local; sem áudio web |
+| Deteção de pessoas / seleção | Integrada via HOG/OpenCV | Sem benchmark de pessoas reais; inferior a modelos modernos em vários cenários |
+| Referência persistente / confirmação de recuperação | Integrada | Testes sintéticos de perda, cruzamento e recuperação; não garante identidade real |
+| Cinema/Suave/Dinâmico e recorte digital | Integrado | Testes de enquadramento dentro da imagem; qualidade física não validada |
+| Troca automática entre câmeras | Experimental e desativada inicialmente | Cinco amostras novas, unicidade e cooldown; apenas imagem, não áudio/PTZ |
+| ONVIF | Integrado com descoberta de serviços, autenticação, movimento e presets | Servidor simulado; sem certificação ou testes físicos |
+| VISCA IP/Serial e Pelco-D TCP/Serial | Integrados | Pacotes e transporte UDP local testados; sem validação física/ACK VISCA |
+| Comandos manuais / presets / deadman | Integrados | Teste de paragem após 350 ms sem atualização + tempo de I/O |
+| Joystick físico | Adaptador WinMM integrado | X/Y e botões 1/2; calibração por modelo e hardware pendentes |
+| Identidade V / tema / manual | Aplicados ao código, ativos e gerador do PDF | Sem promessa de equivalência visual exata ao mockup |
+| Instalador e portable | Workflow de desenvolvimento preparado | Só aprovados se o workflow e teste do executável passarem |
 
-A aprovação de equivalência exige comparação de cenários gravados e equipamentos reais,
-incluindo perdas de sinal, cruzamento de pessoas, recuperação, movimentos PTZ, latência,
-carga prolongada, sincronização áudio/vídeo e compatibilidade de projetos.
-A versão anterior permanece na branch main. Não abrir projetos antigos como se fossem compatíveis.
+## Ainda falta para equivalência completa
 
-Limitações desta etapa: composição em CPU; fontes de imagem são redimensionadas à caixa;
-texto simples; resolução inicial 1280×720/25 fps; sem relógio A/V nem compensação temporal
-de frames descartados. A duração gravada pode divergir do tempo real se o processamento
-não mantiver a taxa configurada. Não usar esta etapa em produção.
+- Validar câmeras, microfones, joystick e serviços reais; medir precisão, latência,
+  perda de sinal, recuperação e comportamento de comandos em cada protocolo/modelo.
+- Captura de áudio do sistema por loopback, áudio de páginas web, filtros de áudio/vídeo,
+  monitorização por fonte, offsets de sincronização e compensação de relógios de captura.
+- Detector/associação avançados e testes de oclusão/cruzamento reais. HOG e histograma
+  de aparência não têm a mesma qualidade de sistemas avançados de rastreio.
+- Encaminhamento de áudio e PTZ por câmera durante handoff. A troca atual substitui a
+  imagem da fonte original; mudar de câmera interrompe o PTZ até configuração explícita.
+- Equivalência com plugins, filtros e fontes especializadas do motor anterior. Não existe
+  compatibilidade binária nem migração automática de projetos.
+- Persistência das posições dos painéis, tradução completa PT/EN/ES, atualização automática,
+  gestão de licenças/assinaturas e integrações externas adicionais.
+- Testes prolongados de CPU/memória, recuperação de dispositivos, gravações longas,
+  assinatura de código, instalador final e auditoria de dependências distribuídas.
+
+A saída tem um relógio comum de áudio/vídeo. Isso mantém a cadência de saída, mas não
+sincroniza automaticamente os relógios das capturas separadas. Não afirmar sincronização
+perfeita nem equivalência completa com base apenas nos testes de ficheiros sintéticos.

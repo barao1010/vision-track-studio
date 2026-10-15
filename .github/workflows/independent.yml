@@ -9,15 +9,52 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: '0'
+      VISION_TRACK_TEST_WEB: '1'
+      VISION_TRACK_TEST_RTMP: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements-build.txt
+      - name: Install Chromium
+        run: python -m playwright install chromium
       - name: Install external FFmpeg for tests
         run: choco install ffmpeg --no-progress -y
-      - name: Engine and real video tests
+      - name: Engine, A/V, protocols, RTMP and browser tests
         run: python -m unittest discover -s tests -v
-      - name: Desktop startup smoke test
-        run: python -c "import tkinter as tk; from vtrack.app import App; root=tk.Tk(); app=App(root); root.after(1500, app.close); root.mainloop()"
+      - name: Desktop startup and screenshot
+        run: python -m scripts.smoke
+      - name: Build identity and development manual
+        run: |
+          python -m scripts.build_assets
+          python -m scripts.build_manual
+      - name: Package development desktop
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name VisionTrackStudio --icon assets/vision-track.ico --collect-all playwright --collect-all cv2 --collect-all sounddevice run_studio.py
+      - name: Collect dependency notices
+        run: python -m scripts.collect_notices
+      - name: Packaged desktop startup test
+        shell: pwsh
+        run: |
+          $process = Start-Process dist/VisionTrackStudio/VisionTrackStudio.exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(45000)) { $process.Kill(); throw 'Desktop startup timed out' }
+          if ($process.ExitCode -ne 0) { throw "Desktop startup failed: $($process.ExitCode)" }
+      - name: Build development installer and portable
+        shell: pwsh
+        run: |
+          & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/windows.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+          Copy-Item docs dist/VisionTrackStudio/docs -Recurse
+          Compress-Archive -Path dist/VisionTrackStudio -DestinationPath dist/Vision-Track-Studio-0.2.0-dev.2-Portable.zip
+      - name: Upload development packages (not a final Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vision-Track-Studio-0.2.0-dev.2-Windows
+          path: |
+            dist/*Setup.exe
+            dist/*Portable.zip
+            docs/Vision-Track-Studio-Manual-PT.pdf
+            assets/desktop.png

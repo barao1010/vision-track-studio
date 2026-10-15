@@ -1,0 +1,23 @@
+import os
+import unittest
+
+
+@unittest.skipUnless(os.name == 'nt' or os.environ.get('DISPLAY'), 'Requer ambiente gráfico')
+class DesktopTests(unittest.TestCase):
+    def test_startup_scene_switch_and_shutdown(self):
+        import tkinter as tk
+        from vtrack.app import App
+        from vtrack.engine import Scene, Source
+        root = tk.Tk()
+        errors = []
+        root.report_callback_exception = lambda kind, value, tb: errors.append(value)
+        app = App(root)
+        scene = Scene('Teste', [Source('Texto', 'text', 'Teste')])
+        app.project.scenes.append(scene)
+        app.studio.preview = scene.id
+        app.refresh_lists()
+        app.studio.take(__import__('time').monotonic(), .1)
+        root.after(500, app.close)
+        root.mainloop()
+        self.assertEqual(errors, [])
+        self.assertFalse(app.runtime.audio_worker.is_alive())

@@ -25,9 +25,10 @@ class Source:
     opacity: float = 1.0
     visible: bool = True
     id: str = field(default_factory=identifier)
+    settings: dict = field(default_factory=dict)
 
     def validate(self):
-        if self.kind not in {'color', 'image', 'text', 'video', 'rtsp'}:
+        if self.kind not in {'color', 'image', 'text', 'video', 'rtsp', 'camera', 'desktop', 'window', 'microphone', 'audio', 'browser'}:
             raise ValueError('Tipo de fonte inválido')
         if not self.name or not self.id:
             raise ValueError('Fonte sem nome ou identificador')
@@ -94,7 +95,7 @@ class Project:
         root = Path(path).resolve().parent
         for scene in project.scenes:
             for source in scene.sources:
-                if source.kind in {'image', 'video'} and not Path(source.value).is_absolute():
+                if source.kind in {'image', 'video', 'audio'} and not Path(source.value).is_absolute():
                     source.value = str(root / source.value)
         return project
 
@@ -105,12 +106,13 @@ class Compositor:
         self.project = project
         self.images = {}
         self.errors = {}
+        self.fonts = {}
 
     def render(self, scene, frames=None):
         canvas = Image.new('RGBA', (self.project.width, self.project.height), 'black')
         frames = frames or {}
         for source in scene.sources:
-            if not source.visible:
+            if not source.visible or source.kind in {'audio', 'microphone'}:
                 continue
             try:
                 size = (source.width, source.height)
@@ -118,7 +120,10 @@ class Compositor:
                     layer = Image.new('RGBA', size, source.value)
                 elif source.kind == 'text':
                     layer = Image.new('RGBA', size)
-                    font = ImageFont.load_default(size=max(12, min(96, source.height // 3)))
+                    font_size = max(12, min(96, source.height // 3))
+                    if font_size not in self.fonts:
+                        self.fonts[font_size] = ImageFont.load_default(size=font_size)
+                    font = self.fonts[font_size]
                     ImageDraw.Draw(layer).text((8, 8), source.value, fill='white', font=font)
                 elif source.kind == 'image':
                     stat = Path(source.value).stat()
@@ -148,6 +153,7 @@ class Studio:
         self.preview = project.scenes[0].id
         self.program = project.scenes[0].id
         self.transition = None
+        self.last_frames = {}
 
     def scene(self, identifier):
         return next(s for s in self.project.scenes if s.id == identifier)
@@ -155,14 +161,18 @@ class Studio:
     def take(self, now, duration=0.0):
         if duration < 0 or not math.isfinite(duration):
             raise ValueError('Duração inválida')
+        if self.preview == self.program:
+            self.transition = None
+            return
         # A take during a fade starts from the current composite, avoiding a flash.
-        start = self.frame(now).copy() if self.transition else None
+        start = self.frame(now, self.last_frames).copy() if self.transition else None
         previous = self.program
         self.program = self.preview
         self.preview = previous
         self.transition = (now, duration, start, previous) if duration else None
 
     def frame(self, now, frames=None):
+        self.last_frames = frames or {}
         target = self.compositor.render(self.scene(self.program), frames)
         if self.transition:
             start, duration, frozen, previous = self.transition

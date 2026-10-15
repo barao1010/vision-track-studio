@@ -14,19 +14,31 @@ def ffmpeg():
     path = os.environ.get('VISION_TRACK_FFMPEG') or shutil.which('ffmpeg')
     if not path:
         raise RuntimeError('Instale FFmpeg ou defina VISION_TRACK_FFMPEG')
+    if os.name == 'nt' and Path(path).parent.name.lower() == 'bin':
+        package = Path(os.environ.get('ProgramData', r'C:\ProgramData')) / 'chocolatey/lib/ffmpeg/tools'
+        candidates = list(package.glob('**/ffmpeg.exe')) if package.exists() else []
+        if candidates:
+            path = str(candidates[0])
     return path
 
 
+def spawn(arguments, **kwargs):
+    if os.name == 'nt':
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    return subprocess.Popen(arguments, **kwargs)
+
+
 class Decoder:
-    def __init__(self, value, size, network=False):
+    def __init__(self, value, size, network=False, input_args=None):
         self.size = size
         self.latest = None
+        self.timestamp = 0
         self.error = None
         self.lock = threading.Lock()
         self.stopping = False
         options = ['-rtsp_transport', 'tcp', '-rw_timeout', '5000000'] if network else ['-re', '-stream_loop', '-1']
-        self.process = subprocess.Popen([ffmpeg(), '-nostdin', '-loglevel', 'error', *options,
-            '-i', value, '-an', '-vf', f'scale={size[0]}:{size[1]}', '-pix_fmt', 'rgb24',
+        inputs = input_args if input_args is not None else [*options, '-i', value]
+        self.process = spawn([ffmpeg(), '-nostdin', '-loglevel', 'error', *inputs, '-an', '-vf', f'scale={size[0]}:{size[1]}', '-pix_fmt', 'rgb24',
             '-f', 'rawvideo', 'pipe:1'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.worker = threading.Thread(target=self._read, daemon=True)
         self.worker.start()
@@ -43,6 +55,7 @@ class Decoder:
                 data.extend(part)
             with self.lock:
                 self.latest = Image.frombytes('RGB', self.size, bytes(data))
+                self.timestamp = time.monotonic()
 
     def frame(self):
         with self.lock:
@@ -75,7 +88,7 @@ class VideoOutput:
         if not live and Path(destination).exists():
             raise FileExistsError('O ficheiro de destino já existe')
         codec = ['-c:v', encoder, '-b:v', '4500k', '-g', str(fps * 2)] if live else ['-c:v', 'mpeg4', '-q:v', '3']
-        self.process = subprocess.Popen([ffmpeg(), '-nostdin', '-hide_banner', '-loglevel', 'error',
+        self.process = spawn([ffmpeg(), '-nostdin', '-hide_banner', '-loglevel', 'error',
             '-n', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
             '-r', str(fps), '-i', 'pipe:0', '-an', *codec, '-pix_fmt', 'yuv420p',
             '-f', 'flv' if live else 'matroska', destination], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
