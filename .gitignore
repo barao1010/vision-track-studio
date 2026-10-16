@@ -3,3 +3,6 @@ build_*/
 .vs/
 *.exe
 *.msi
+
+__pycache__/
+*.pyc

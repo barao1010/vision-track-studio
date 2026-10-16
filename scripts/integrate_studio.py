@@ -14,6 +14,7 @@ def replace(path, old, new):
         raise RuntimeError(f"Upstream anchor missing: {path}: {old}")
     file.write_text(text.replace(old, new), encoding="utf-8")
 
+shutil.copy2(project / "tracking/FixedCameraSceneZoom.hpp", root / "frontend/widgets/FixedCameraSceneZoom.hpp")
 shutil.copy2(project / "tracking/VisionTrackDock.hpp", root / "frontend/widgets/VisionTrackDock.hpp")
 replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"')
 replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',

@@ -87,6 +87,29 @@ jobs:
           $exe = Resolve-Path 'obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/vision-track-studio.exe'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw "Startup failed: $($process.ExitCode)" }
+      - name: Check actual Windows application window
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/vision-track-studio.exe'
+          $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList '--portable', '--disable-updater', '--disable-shutdown-check' -PassThru
+          try {
+            $windowReady = $false
+            for ($attempt = 0; $attempt -lt 45; $attempt++) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) { throw "Application exited during GUI startup: $($process.ExitCode)" }
+              if ($process.MainWindowHandle -ne 0 -and $process.Responding) { $windowReady = $true; break }
+            }
+            if (-not $windowReady) { throw 'No responsive application window appeared' }
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+            if ($process.HasExited -or -not $process.Responding) { throw 'Application failed after window initialization' }
+          } finally {
+            if (-not $process.HasExited) {
+              $null = $process.CloseMainWindow()
+              if (-not $process.WaitForExit(10000)) { $process.Kill() }
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: Vision-Track-Studio-Windows-preview
@@ -97,6 +120,7 @@ jobs:
             Vision-Track-Studio-Manual-PT.pdf
           if-no-files-found: error
       - name: Publish explicitly experimental release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

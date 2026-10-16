@@ -22,7 +22,7 @@ Não é uma versão final validada para produção. Áudio, transmissão, plugin
 
 ## Ainda pendente
 
-Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, recorte digital automático de fontes fixas, troca de alvo entre câmeras e joystick físico, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
+Validação da associação de alvo em cruzamentos reais, descoberta automática ONVIF, troca de alvo entre câmeras e joystick físico, validação de ponta a ponta em hardware. O rastreio experimental não garante preservar a identidade de pessoas semelhantes.
 
 ## Compilar
 
@@ -42,4 +42,20 @@ OBS Studio é GPL-2.0-ou-posterior. As alterações nativas usam GPL-2.0-ou-post
 
 ## Integração do rastreio Vision Track AI
 
-Portados para o worker nativo: seleção persistente, referência de aparência fixa, confirmação em vários quadros após perda/ambiguidade, perfis Cinema/Suave/Dinâmico e composição com margem acima do corpo. Adicionados VISCA IP, VISCA Serial, Pelco-D, setas, zoom manual, presets e posição inicial. O detector continua YOLOX, enquanto o app anterior usa COCO-SSD; a paridade de recursos não é completa. Zoom digital automático, várias câmeras e joystick físico permanecem pendentes. Protocolos e comportamento físico exigem validação nas câmeras reais.
+Portados para o worker nativo: seleção persistente, referência de aparência fixa, confirmação em vários quadros após perda/ambiguidade, perfis Cinema/Suave/Dinâmico e composição com margem acima do corpo. Adicionados VISCA IP, VISCA Serial, Pelco-D, setas, zoom manual, presets e posição inicial. O detector continua YOLOX, enquanto o app anterior usa COCO-SSD; a paridade de recursos não é completa. Zoom digital automático integrado na linha de recuperação; várias câmeras e joystick físico permanecem pendentes. Protocolos e comportamento físico exigem validação nas câmeras reais.
+
+## Recuperação da base nativa (16/10/2026)
+
+O ramo `independent-engine` / 0.2.0-dev.3 não tem paridade com o OBS.
+Esta linha mantém o motor nativo do OBS na revisão indicada acima, com
+identidade própria e disposição dos painéis modificada.
+
+O rastreio recebe quadros da própria fonte do OBS, sem abrir novamente a
+câmera USB/placa de captura. Escolha uma fonte em “Fonte de vídeo do OBS”.
+No modo fixo, o recorte digital acompanha o alvo na pré-visualização e no
+programa e restaura o enquadramento ao parar.
+
+Bíblia por voz e atualização automática continuam pendentes nesta linha nativa.
+Câmeras, áudio, transmissão e associação visual exigem validação real.
+A recuperação não é uma entrega completa. O pipeline exige agora uma janela
+Windows responsiva além de `--version`; isso não comprova produção audiovisual.
