@@ -85,6 +85,7 @@ class VisionTrackDock : public QDockWidget {
     QTimer sourceTimer;
     QPointer<ScreenshotObj> sourceCapture;
     bool useObsFrames = false;
+    bool trackingEnabled = false;
     QSpinBox *port, *baud, *address, *presetNumber;
     QTimer manualTimer;
     QJsonObject manualCommand;
@@ -100,6 +101,7 @@ class VisionTrackDock : public QDockWidget {
             worker.write(QJsonDocument(message).toJson(QJsonDocument::Compact) + '\n');
     }
     void shutdown() {
+        trackingEnabled = false;
         sourceTimer.stop();
         sceneZoom.restore();
         watchdog.stop();
@@ -234,6 +236,7 @@ public:
             auto *button = new QPushButton(label, manualBody);
             manualLayout->addWidget(button, row, col);
             QObject::connect(button, &QPushButton::pressed, this, [this, pan, tilt, zoom]() {
+                trackingEnabled = false;
                 manualCommand = QJsonObject{{"action", "manual"}, {"pan", pan * speed->value()},
                                              {"tilt", tilt * speed->value()}, {"zoom", zoom * .15}};
                 send(manualCommand); manualTimer.start();
@@ -315,7 +318,7 @@ public:
                 const auto message = QJsonDocument::fromJson(row).object();
                 if (message.contains("status")) status->setText(message["status"].toString());
                 if (message["zoomReset"].toBool(false)) sceneZoom.restore();
-                if (message.contains("digitalCrop") && cameraMode->currentData().toString() == QStringLiteral("fixed")) {
+                if (trackingEnabled && message.contains("digitalCrop") && cameraMode->currentData().toString() == QStringLiteral("fixed")) {
                     const auto crop = message["digitalCrop"].toObject();
                     sceneZoom.apply(crop["left"].toDouble(), crop["top"].toDouble(), crop["width"].toDouble(), crop["height"].toDouble());
                 }
@@ -328,8 +331,8 @@ public:
         });
         QObject::connect(&worker, &QProcess::readyReadStandardError, this, [this]() { worker.readAllStandardError(); });
         QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { sourceTimer.stop(); sceneZoom.restore(); watchdog.stop(); manualTimer.stop(); });
-        QObject::connect(stop, &QPushButton::clicked, this, [this]() { manualTimer.stop(); sceneZoom.restore(); send(QJsonObject{{"action", "stop"}}); });
-        preview->selected = [this](QJsonArray box) { send(QJsonObject{{"action", "select"}, {"box", box}}); };
+        QObject::connect(stop, &QPushButton::clicked, this, [this]() { trackingEnabled = false; manualTimer.stop(); sceneZoom.restore(); send(QJsonObject{{"action", "stop"}}); });
+        preview->selected = [this](QJsonArray box) { trackingEnabled = true; send(QJsonObject{{"action", "select"}, {"box", box}}); };
         QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { shutdown(); });
     }
     ~VisionTrackDock() override { shutdown(); }

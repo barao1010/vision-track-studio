@@ -67,8 +67,8 @@ class FixedCameraSceneZoom {
         obs_transform_info transform = state.info;
         // Keep the source in its original OBS footprint while digitally
         // reframing its content. Restore exactly on stop/disconnect.
-        transform.scale.x *= static_cast<float>(sourceWidth) / effectiveWidth;
-        transform.scale.y *= static_cast<float>(sourceHeight) / effectiveHeight;
+        transform.scale.x *= static_cast<float>(sourceWidth - state.crop.left - state.crop.right) / effectiveWidth;
+        transform.scale.y *= static_cast<float>(sourceHeight - state.crop.top - state.crop.bottom) / effectiveHeight;
         obs_sceneitem_set_crop(item, &crop);
         obs_sceneitem_set_info2(item, &transform);
         return true;
