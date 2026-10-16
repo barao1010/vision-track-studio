@@ -11,7 +11,17 @@ concurrency:
   group: obs-parity-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  validator-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install av==16.0.1 numpy==2.2.6
+      - run: python -m unittest discover -s validation -p 'test_*.py' -v
   exercise:
+    needs: validator-tests
     strategy:
       fail-fast: false
       matrix:

@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import struct
 import wave
+import uuid
 from PIL import Image
 
 p = argparse.ArgumentParser()
@@ -53,4 +54,25 @@ ChannelSetup=Stereo
 ''')
 scenes = config / 'basic/scenes'
 scenes.mkdir(parents=True, exist_ok=True)
-(scenes / 'Parity.json').write_text(json.dumps({'name':'Parity', 'sources':[], 'scene_order':[], 'modules':{'scripts-tool':[{'path':(fixture/'parity.lua').as_posix(),'settings':{}}]}}))
+def source(kind, name, settings):
+    return {'id':kind.split('_v')[0], 'versioned_id':kind, 'name':name,
+            'uuid':str(uuid.uuid5(uuid.NAMESPACE_URL, 'vision-parity/'+name)),
+            'settings':settings, 'mixers':1, 'volume':0.8 if name=='Parity Audio' else 1.0}
+
+inputs = [
+    source('color_source_v3','Parity Color',{'width':640,'height':360,'color':4281558732}),
+    source('image_source','Parity Image',{'file':(fixture/'image.png').as_posix()}),
+    source('browser_source','Parity Browser',{'is_local_file':True,'local_file':(fixture/'browser.html').as_posix(),'width':640,'height':360,'css':'body { margin:0; overflow:hidden; }'}),
+    source('ffmpeg_source','Parity Audio',{'local_file':(fixture/'tone.wav').as_posix(),'is_local_file':True,'looping':True})
+]
+scene_sources=[]
+for index, visual in enumerate(inputs[:3],1):
+    items=[{'name':item['name'],'source_uuid':item['uuid'],'id':i,'visible':True,'scale':{'x':1.0,'y':1.0},'pos':{'x':0.0,'y':0.0},'align':5} for i,item in enumerate([visual,inputs[3]],1)]
+    scene_sources.append(source('scene',f'Parity {index}',{'items':items}))
+(scenes/'Parity.json').write_text(json.dumps({
+    'name':'Parity', 'current_scene':'Parity 1','current_program_scene':'Parity 1',
+    'current_transition':'Fade','transition_duration':300,
+    'sources':inputs+scene_sources,
+    'scene_order':[{'name':s['name']} for s in scene_sources],
+    'modules':{'scripts-tool':[{'path':(fixture/'parity.lua').as_posix(),'settings':{}}]}
+}))

@@ -6,3 +6,10 @@ build_*/
 
 __pycache__/
 *.pyc
+
+/validation/tone.wav
+/validation/image.png
+/validation/browser.html
+/validation/exercise.json
+/validation/measurements.json
+/validation/recordings/

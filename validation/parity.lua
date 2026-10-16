@@ -13,63 +13,27 @@ end
 function tick()
     step = step + 1
     if step == 1 then
-        local tone = obs.obs_data_create()
-        obs.obs_data_set_string(tone, "local_file", root .. "tone.wav")
-        obs.obs_data_set_bool(tone, "is_local_file", true)
-        obs.obs_data_set_bool(tone, "looping", true)
-        local audio = obs.obs_source_create("ffmpeg_source", "Parity Audio", tone, nil)
-        obs.obs_data_release(tone)
-        if audio ~= nil then
-            obs.obs_source_set_audio_mixers(audio, 1)
-            obs.obs_source_set_volume(audio, 0.8)
+        -- Load the exact same saved collection through the normal OBS loader.
+        -- Creating scenes inside Lua's timer can re-enter frontend event callbacks.
+        for _, entry in ipairs({{"color","Parity Color"},{"image","Parity Image"},{"browser","Parity Browser"},{"audio","Parity Audio"}}) do
+            local source = obs.obs_get_source_by_name(entry[2])
+            result(entry[1], source ~= nil)
+            if source ~= nil then obs.obs_source_release(source) end
         end
-        local settings = obs.obs_data_create()
-        obs.obs_data_set_int(settings, "width", 640)
-        obs.obs_data_set_int(settings, "height", 360)
-        obs.obs_data_set_int(settings, "color", 4281558732)
-        local color = obs.obs_source_create("color_source_v3", "Parity Color", settings, nil)
-        obs.obs_data_release(settings)
-        settings = obs.obs_data_create()
-        obs.obs_data_set_string(settings, "file", root .. "image.png")
-        local image = obs.obs_source_create("image_source", "Parity Image", settings, nil)
-        obs.obs_data_release(settings)
-        settings = obs.obs_data_create()
-        obs.obs_data_set_bool(settings, "is_local_file", true)
-        obs.obs_data_set_string(settings, "local_file", root .. "browser.html")
-        obs.obs_data_set_int(settings, "width", 640)
-        obs.obs_data_set_int(settings, "height", 360)
-        obs.obs_data_set_string(settings, "css", "body { margin:0; overflow:hidden; }")
-        local browser = obs.obs_source_create("browser_source", "Parity Browser", settings, nil)
-        obs.obs_data_release(settings)
-        result("color", color ~= nil)
-        result("image", image ~= nil)
-        result("browser", browser ~= nil)
-        result("audio", audio ~= nil)
-        for i, source in ipairs({color, image, browser}) do
-            local scene = obs.obs_scene_create("Parity " .. i)
-            scenes[i] = scene
-            if source ~= nil then obs.obs_scene_add(scene, source) end
-            if audio ~= nil then obs.obs_scene_add(scene, audio) end
+        for i=1,3 do
+            scenes[i] = obs.obs_get_source_by_name("Parity " .. i)
         end
-        if color ~= nil then obs.obs_source_release(color) end
-        if image ~= nil then obs.obs_source_release(image) end
-        if browser ~= nil then obs.obs_source_release(browser) end
-        if audio ~= nil then obs.obs_source_release(audio) end
-        local fade = obs.obs_source_create_private("fade_transition", "Parity Fade", nil)
-        if fade ~= nil then
-            obs.obs_frontend_set_current_transition(fade)
-            obs.obs_frontend_set_transition_duration(300)
-            obs.obs_source_release(fade)
-        end
-        result("fade", fade ~= nil)
-        obs.obs_frontend_set_current_scene(obs.obs_scene_get_source(scenes[1]))
+        local transition = obs.obs_frontend_get_current_transition()
+        result("fade", transition ~= nil and obs.obs_source_get_unversioned_id(transition) == "fade_transition")
+        if transition ~= nil then obs.obs_source_release(transition) end
+        obs.obs_frontend_set_current_scene(scenes[1])
     elseif step == 2 then
         obs.obs_frontend_recording_start()
     elseif step == 3 then
         result("recording", obs.obs_frontend_recording_active())
-        obs.obs_frontend_set_current_scene(obs.obs_scene_get_source(scenes[2]))
+        obs.obs_frontend_set_current_scene(scenes[2])
     elseif step == 4 then
-        obs.obs_frontend_set_current_scene(obs.obs_scene_get_source(scenes[3]))
+        obs.obs_frontend_set_current_scene(scenes[3])
     elseif step == 5 then
         obs.obs_frontend_recording_stop()
     elseif step == 6 then
@@ -100,5 +64,5 @@ end
 
 function script_unload()
     obs.timer_remove(tick)
-    for _, scene in ipairs(scenes) do obs.obs_scene_release(scene) end
+    for _, scene in ipairs(scenes) do obs.obs_source_release(scene) end
 end
