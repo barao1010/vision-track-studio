@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install pillow==11.3.0 av==16.0.1 numpy==2.2.6
+      - run: python -m pip install pillow==11.3.0 av==16.0.1 numpy==2.2.6 websocket-client==1.8.0
       - name: Apply Vision changes only to derivative
         if: matrix.flavor == 'vision'
         run: |
@@ -66,15 +66,7 @@ jobs:
           $exe = Resolve-Path "obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/$binary"
           $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList '--portable', '--disable-updater', '--disable-shutdown-check', '--profile', 'Parity', '--collection', 'Parity' -PassThru
           try {
-            $finished = $false
-            for ($attempt = 0; $attempt -lt 90; $attempt++) {
-              Start-Sleep -Seconds 1
-              $process.Refresh()
-              if ($process.HasExited) { throw "Application exited: $($process.ExitCode)" }
-              if (Test-Path 'vision-track-studio/validation/exercise.json') { $finished = $true; break }
-            }
-            if (-not $finished) { throw 'Audiovisual exercise did not finish' }
-            python vision-track-studio/validation/measure.py measure vision-track-studio/validation
+            python vision-track-studio/validation/exercise.py
             if ($LASTEXITCODE -ne 0) { throw 'Recorded audiovisual validation failed' }
           } finally {
             if (-not $process.HasExited) {
@@ -88,9 +80,9 @@ jobs:
         with:
           name: parity-${{ matrix.flavor }}
           path: |
-            vision-track-studio/validation/measurements.json
-            vision-track-studio/validation/exercise.json
-            vision-track-studio/validation/recordings/*.mkv
+            vision-track-studio/validation/results/**/measurements.json
+            vision-track-studio/validation/results/**/exercise.json
+            vision-track-studio/validation/results/**/recordings/*.mkv
             obs-studio/build_x64/rundir/RelWithDebInfo/config/**/logs/*.txt
           if-no-files-found: warn
   compare:
@@ -109,7 +101,4 @@ jobs:
       - name: Compare measured upstream and Vision recordings
         shell: bash
         run: |
-          upstream=$(find comparison/parity-upstream -name measurements.json -print -quit)
-          vision=$(find comparison/parity-vision -name measurements.json -print -quit)
-          test -n "$upstream" && test -n "$vision"
-          python validation/measure.py compare "$upstream" "$vision"
+          python validation/compare_suite.py comparison

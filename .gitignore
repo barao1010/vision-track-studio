@@ -13,3 +13,6 @@ __pycache__/
 /validation/exercise.json
 /validation/measurements.json
 /validation/recordings/
+
+/validation/rpc-secret.json
+/validation/results/

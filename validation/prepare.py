@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 import wave
 import uuid
+import secrets
 from PIL import Image
 
 p = argparse.ArgumentParser()
@@ -74,5 +75,11 @@ for index, visual in enumerate(inputs[:3],1):
     'current_transition':'Fade','transition_duration':300,
     'sources':inputs+scene_sources,
     'scene_order':[{'name':s['name']} for s in scene_sources],
-    'modules':{'scripts-tool':[{'path':(fixture/'parity.lua').as_posix(),'settings':{}}]}
+    'modules':{}
 }))
+
+password=secrets.token_urlsafe(32)
+websocket_config=config/'plugin_config/obs-websocket'
+websocket_config.mkdir(parents=True,exist_ok=True)
+(websocket_config/'config.json').write_text(json.dumps({'first_load':False,'server_enabled':True,'server_port':4455,'auth_required':True,'server_password':password,'alerts_enabled':False}))
+(fixture/'rpc-secret.json').write_text(json.dumps({'password':password}))
