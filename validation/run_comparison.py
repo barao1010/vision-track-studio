@@ -42,7 +42,7 @@ def run(renderer, reference, output):
     # Actual decoded negative controls: silence and a hard cut must fail measurement.
     for label, options in [
         ('silence', ['-af', 'volume=0']),
-        ('cut', ['-vf', "select='lt(t,3.5)+gte(t,3.8)',setpts=N/(30*TB)"]),
+        ('cut', ['-vf', "select='lt(t,3.5)+gte(t,3.8)',setpts=N/(30*TB),tpad=stop_mode=clone:stop_duration=0.3"]),
     ]:
         broken = output/f'negative-{label}.mkv'
         subprocess.run(['ffmpeg', '-v', 'error', '-i', str(movie), *options,
