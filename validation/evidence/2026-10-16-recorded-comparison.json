@@ -1,0 +1,85 @@
+{
+  "scope": "7s file rendering: scene colors, image, fade timing, stereo tone/gain",
+  "reference_run": 38859179964,
+  "reference_artifact": 12028698711,
+  "obs_revision": "f082210c177a03572cace88c168d0f32d8cde39e",
+  "full_obs_parity": false,
+  "candidate": {
+    "sha256": "26fb74fb8d70f2e33eda6c21f038ef503d8f2dd541ed16d35e379d37e6550dd8",
+    "first_rgb": [
+      204.0,
+      102.0,
+      51.0
+    ],
+    "second_rgb": [
+      20.0,
+      200.0,
+      50.0
+    ],
+    "fade_frames": 8,
+    "fade_start": 106,
+    "rms": [
+      0.1380969135131315,
+      0.1380969135131315
+    ],
+    "tone_hz": 440.0,
+    "decoded_frames": 210
+  },
+  "comparisons": {
+    "normal": {
+      "reference": {
+        "sha256": "b3b8695ac374c03359342d12891ae5a0c958cadc647542d6be2f6b2a3d918ba1",
+        "first_rgb": [
+          203.0,
+          100.0,
+          49.0
+        ],
+        "second_rgb": [
+          20.0,
+          199.0,
+          49.0
+        ],
+        "fade_frames": 8,
+        "fade_start": 107,
+        "rms": [
+          0.13785269399328054,
+          0.13785269400705535
+        ],
+        "tone_hz": 440.0,
+        "decoded_frames": 210
+      },
+      "errors": [],
+      "passed": true
+    },
+    "studio": {
+      "reference": {
+        "sha256": "e1843cd426312dc28500dc69838bc7760b19bc1fc970697258a9eedb5cc3176d",
+        "first_rgb": [
+          203.0,
+          100.0,
+          49.0
+        ],
+        "second_rgb": [
+          20.0,
+          199.0,
+          49.0
+        ],
+        "fade_frames": 8,
+        "fade_start": 106,
+        "rms": [
+          0.13780371602672056,
+          0.13780371598239802
+        ],
+        "tone_hz": 440.0,
+        "decoded_frames": 210
+      },
+      "errors": [],
+      "passed": true
+    }
+  },
+  "negative_controls": [
+    "silence rejected",
+    "hard cut rejected"
+  ],
+  "passed": true
+}

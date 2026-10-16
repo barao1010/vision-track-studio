@@ -11,3 +11,31 @@ jobs:
       - run: cmake -S . -B build
       - run: cmake --build build --config Release
       - run: ctest --test-dir build -C Release --output-on-failure
+  recorded-comparison:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy==2.3.5
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release
+      - uses: actions/download-artifact@v4
+        with:
+          name: parity-upstream
+          run-id: 38859179964
+          github-token: ${{ github.token }}
+          path: build/obs-reference
+      - run: python validation/run_comparison.py build/render_fixture build/obs-reference build/recorded-comparison
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-recorded-comparison
+          path: |
+            build/recorded-comparison/comparison.json
+            build/recorded-comparison/independent.mkv
