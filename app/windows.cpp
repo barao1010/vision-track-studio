@@ -6,6 +6,7 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 #include "core.hpp"
+#include "windows_desktop.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -14,7 +15,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -60,6 +61,11 @@ void addScene() {
 Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(index==LB_ERR) return nullptr;return &scenes[selected]->item(ids[selected].at(static_cast<std::size_t>(index)));}
 void command(int id) {
     if(id==AddScene) addScene();
+    else if(id==AddDesktop) {
+        auto key="Tela "+std::to_string(++serial);
+        scenes[selected]->add({key,std::make_shared<DesktopSource>(),0,0,640,360,{}});
+        ids[selected].push_back(key);refresh();
+    }
     else if(id==AddImage) {
         wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;ofn.lpstrFilter=L"Imagens\0*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff\0Todos\0*.*\0";ofn.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
         if(GetOpenFileName(&ofn)) addSource(imageFile(path));
@@ -96,9 +102,10 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Mostrar / ocultar",Toggle,15,420,180,30);
             control(L"BUTTON",L"Remover fonte",Remove,15,455,180,30);
             control(L"BUTTON",L"Diminuir",Smaller,15,490,85,30);control(L"BUTTON",L"Ampliar",Larger,105,490,90,30);
+            control(L"BUTTON",L"Capturar tela",AddDesktop,15,525,180,30);
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
-            control(L"STATIC",L"Desenvolvimento: cenas e imagens. Captura e transmissao ainda indisponiveis.",0,220,300,660,50);
+            control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera, microfone e transmissao pendentes.",0,220,300,660,50);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
