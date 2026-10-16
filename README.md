@@ -30,15 +30,16 @@ ctest --test-dir build -C Release --output-on-failure
 ## Incomplete — not an application release
 
 A Windows engineering shell now exercises scene/image controls and preview/program
-cut/fade. It is not the approved delivery UI. No hardware capture, browser/CSS engine, output encoding, streaming,
-encoded recording, resampling, GPU composition, persistence, settings UI, plugin ABI,
+cut/fade, desktop capture and silent MP4 recording. It is not the approved delivery
+UI. No webcam/microphone capture, browser/CSS engine, streaming,
+GPU composition, persistence, settings UI, plugin ABI,
 installer, PTZ/AI integration or Bible integration has been implemented in this
 branch yet. CPU reference composition uses nearest-neighbour scaling; it is not
 performance-equivalent to OBS. Tests validate this core's explicit contracts,
 not full OBS parity. Do not ship this as an OBS replacement.
 
-Next: extend source lifecycle and scheduling, add file-backed fixtures and media
-output adapters, then validate actual recordings before building the desktop UI.
+Next: implement live camera/microphone capture, source lifecycle and scheduling,
+then connect the independently tested core to the approved desktop interface.
 Review each dependency's exact build and redistribution terms before integration.
 No conclusion about licensing of a future complete app follows from core tests.
 
@@ -50,8 +51,8 @@ Reference files are SHA-256 pinned in `validation/run_comparison.py`. Both norma
 and studio reference captures passed this LIMITED comparison: scene RGB endpoints
 within 5/255, fade duration within two frames, start within three frames, stereo
 RMS within 5%, 440 Hz tone within 2 Hz. Silence and a hard-cut negative control
-were rejected. This does not test the independent UI or studio mode (neither
-exists), browser sources, real-time capture or streaming.
+were rejected. This does not test the independent UI or its preview/program
+controls, browser sources, real-time capture or streaming.
 
 Run with an extracted reference artifact and a fresh output directory:
 
@@ -78,9 +79,9 @@ or a substitute for testing protected content, multiple monitors, DPI or latency
 `platform/windows_recording.cpp` uses installed Media Foundation encoders for
 H.264/AAC MP4 output. A three-second recording test decodes all 90 frames and
 checks top/bottom orientation, timestamps, stereo audio duration, 440Hz frequency
-and amplitude. The first run found vertical inversion; a row-order correction
-is being validated. The recorder is not yet wired to the user-facing record
-button, microphone or camera, and is not a complete streaming pipeline.
+and amplitude. The first run found vertical inversion; the row-order correction
+passed Windows CI run 38934171835. The engineering window now uses this recorder,
+but microphone/camera integration and the streaming pipeline remain absent.
 
 ### Audio rate conversion
 
@@ -105,3 +106,7 @@ over ten seconds. This synchronous path is not yet a production capture schedule
 The GUI smoke test starts and stops a recording through WM_COMMAND; CI decodes
 that file to check timestamps, red-to-blue fade, dimensions and the silent track.
 The approved final interface has not yet replaced this engineering window.
+
+Windows CI run 38935120740 passed the GUI recording decode check: 28 H.264
+frames with red-to-blue fade, 30 fps timestamps and a silent AAC track.
+See `docs/DEVELOPMENT_STATE.md` for the concrete checkpoint and remaining work.
