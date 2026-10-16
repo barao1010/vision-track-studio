@@ -81,8 +81,8 @@ void WindowsRecorder::append(const Frame& frame,const AudioBlock& audio) {
     std::vector<BYTE> pixels(static_cast<std::size_t>(s.width)*s.height*4);
     for(int y=0;y<s.height;++y) for(int x=0;x<s.width;++x) {
         auto p=frame.at(x,y);if(!std::isfinite(p.r)||!std::isfinite(p.g)||!std::isfinite(p.b)||!std::isfinite(p.a)) throw std::invalid_argument("Nonfinite pixel");
-        // Positive RGB32 stride uses bottom-up DIB rows in Media Foundation.
-        auto n=(static_cast<std::size_t>(s.height-1-y)*s.width+x)*4;float a=std::clamp(p.a,0.f,1.f);
+        // Sink writer consumes these positive-stride RGB32 buffers in top-down order.
+        auto n=(static_cast<std::size_t>(y)*s.width+x)*4;float a=std::clamp(p.a,0.f,1.f);
         pixels[n]=srgb(p.b*a);pixels[n+1]=srgb(p.g*a);pixels[n+2]=srgb(p.r*a);
     }
     std::vector<std::int16_t> pcm;pcm.reserve(audio.samples.size());
