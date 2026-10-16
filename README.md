@@ -85,3 +85,15 @@ assets sem digest e endereços de outros repositórios são rejeitados. Instala�
 é bloqueada com transmissão, gravação, replay ou câmera virtual em execução.
 Ainda é necessário validar o ciclo de atualização completo no Windows com
 uma release nativa nova. Nenhum token do proprietário é distribuído ao cliente.
+
+### Evidência de validação
+
+A comparação automatizada de upstream OBS e Vision passou em 16/10/2026
+(https://github.com/barao1010/vision-track-studio/actions/runs/38859179964):
+áudio gravado, fontes de imagem/navegador com CSS e transições nos modos normal
+e estúdio. Isso não equivale a validar todas as funções do OBS nem câmeras reais.
+
+O pipeline adicional instala o pacote em diretório temporário, grava o mesmo
+exercício a partir do aplicativo instalado e recolhe uma captura real de janela.
+Os testes de protocolo usam UDP/TCP em loopback e verificam comandos de paragem
+por timeout; não simulam mecanicamente o movimento de uma câmera real.
