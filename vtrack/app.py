@@ -1,6 +1,7 @@
 """Independent Vision Track desktop studio."""
 from pathlib import Path
 import time
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, simpledialog, messagebox
 from PIL import Image, ImageDraw, ImageTk
@@ -9,7 +10,7 @@ from .engine import Project, Scene, Source, Studio
 from .runtime import Runtime
 from .output import AVOutput
 from .capture import devices
-from .ptz import PTZSession
+from .ptz import CameraControlBank
 from .joystick import Joystick
 
 
@@ -23,7 +24,7 @@ class App:
             Source('Título', 'text', 'VISION TRACK STUDIO', x=80, y=260, width=1100, height=150)])])
         self.studio = Studio(self.project)
         self.runtime = Runtime()
-        self.ptz = None
+        self.camera_controls = CameraControlBank()
         self.joystick = None
         self.manual = None
         self.last_camera = None
@@ -33,18 +34,26 @@ class App:
         self.follow = tk.BooleanVar(value=False)
         self.digital = tk.BooleanVar(value=False)
         self.handoff = tk.BooleanVar(value=False)
+        self.audio_handoff = tk.BooleanVar(value=True)
+        self.ptz_handoff = tk.BooleanVar(value=False)
         self.profile = tk.StringVar(value='Cinema')
         self.zoom = tk.DoubleVar(value=2)
         self.tracker_status = tk.StringVar(value='Selecione uma fonte de vídeo e ative a deteção')
         self.gain = tk.DoubleVar(value=1)
         self.muted = tk.BooleanVar(value=False)
         self.meters = {}
+        self.update_candidate = None
         self.configure_theme()
         self.build()
         self.refresh_lists()
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.bind('<FocusOut>', self.focus_out)
         self.tick()
+        self.root.after(4000, lambda: self.check_updates(silent=True))
+
+    @property
+    def ptz(self):
+        return self.camera_controls.session
 
     def configure_theme(self):
         self.root.configure(bg='#0b1018')
@@ -74,12 +83,15 @@ class App:
         ttk.Label(header, text=' VISION TRACK  STUDIO', font=('Segoe UI', 18, 'bold')).pack(side='left')
         for title, action in [('Novo', self.new), ('Abrir', self.load), ('Guardar', self.save), ('Vídeo', self.format_video)]:
             ttk.Button(header, text=title, command=lambda fn=action: self.guard(fn)).pack(side='right', padx=3)
-        body = ttk.Frame(self.root, padding=6)
-        body.pack(fill='both', expand=True)
-        body.columnconfigure(1, weight=1)
-        body.rowconfigure(0, weight=1)
+        self.status_bar = ttk.Label(self.root, textvariable=self.status, padding=7)
+        self.status_bar.pack(side='bottom', fill='x')
+        self.workspace = ttk.Panedwindow(self.root, orient='vertical')
+        self.workspace.pack(fill='both', expand=True, padx=6, pady=4)
+        body = ttk.Panedwindow(self.workspace, orient='horizontal')
+        self.body_panes = body
+        self.workspace.add(body, weight=1)
         sidebar = ttk.Frame(body)
-        sidebar.grid(row=0, column=0, sticky='nsew', padx=4)
+        body.add(sidebar, weight=1)
         scenes = self.panel(sidebar, 'CENAS')
         scenes.pack(fill='both', expand=True)
         self.scene_list = self.listbox(scenes, 5)
@@ -106,7 +118,7 @@ class App:
         actions_button.configure(menu=actions_menu)
         actions_button.pack(fill='x', pady=3)
         center = ttk.Frame(body)
-        center.grid(row=0, column=1, sticky='nsew', padx=4)
+        body.add(center, weight=5)
         center.columnconfigure(0, weight=1)
         center.columnconfigure(1, weight=1)
         center.rowconfigure(0, weight=1)
@@ -123,7 +135,7 @@ class App:
         ttk.Button(transition, text='CORTE', command=lambda: self.studio.take(time.monotonic())).pack(side='left', padx=5)
         ttk.Button(transition, text='TRANSIÇÃO | 500 ms', command=lambda: self.studio.take(time.monotonic(), .5)).pack(side='left')
         right = ttk.Frame(body)
-        right.grid(row=0, column=2, sticky='ns', padx=4)
+        body.add(right, weight=1)
         mixer = self.panel(right, 'MIXER')
         mixer.pack(fill='both', expand=True)
         self.meter_frame = ttk.Frame(mixer)
@@ -138,10 +150,11 @@ class App:
         controls.pack(fill='x', pady=6)
         self.record_button = self.button(controls, 'Gravar MKV', self.record)
         self.live_button = self.button(controls, 'Transmitir RTMP', self.live)
+        self.update_button = self.button(controls, 'Verificar atualizações', self.check_updates)
         self.button(controls, 'Sobre / estado', lambda: messagebox.showinfo('Vision Track Studio',
             f'Vision Track Studio {__version__}\nBase independente em desenvolvimento.\nPython/Tk, Pillow, NumPy, OpenCV, Playwright, pyserial e FFmpeg externo.\nNão foi validada com câmeras físicas.\nConsulte docs/PARIDADE.md.'))
         self.build_tracking()
-        ttk.Label(self.root, textvariable=self.status, padding=7).pack(fill='x')
+        self.root.after(100, self.restore_layout)
 
     def listbox(self, parent, height):
         box = tk.Listbox(parent, height=height, width=25, bg='#0b1018', fg='#edf3fc', selectbackground='#3187ff', exportselection=False)
@@ -149,8 +162,8 @@ class App:
         return box
 
     def build_tracking(self):
-        bottom = self.panel(self.root, 'RASTREIO E CÂMERAS | experimental')
-        bottom.pack(fill='x', padx=10, pady=4)
+        bottom = self.panel(self.workspace, 'RASTREIO E CÂMERAS | experimental')
+        self.workspace.add(bottom, weight=0)
         preview = ttk.Frame(bottom)
         preview.pack(side='left', padx=5)
         self.camera_view = tk.Label(preview, bg='#0b1018', width=300, height=165)
@@ -168,6 +181,8 @@ class App:
         ttk.Scale(options, from_=1, to=4, variable=self.zoom).pack(fill='x')
         ttk.Checkbutton(options, text='Movimento PTZ automático', variable=self.follow).pack(anchor='w')
         ttk.Checkbutton(options, text='Troca de câmera experimental', variable=self.handoff).pack(anchor='w')
+        ttk.Checkbutton(options, text='Seguir áudio da câmera', variable=self.audio_handoff).pack(anchor='w')
+        ttk.Checkbutton(options, text='Ligar PTZ da próxima câmera', variable=self.ptz_handoff).pack(anchor='w')
         manual = ttk.Frame(bottom)
         manual.pack(side='left', padx=10)
         grid = ttk.Frame(manual)
@@ -347,11 +362,11 @@ class App:
         source = self.selected_source()
         if not source:
             return
-        if source.kind not in {'video', 'rtsp'}:
-            raise ValueError('Use esta opção numa fonte Vídeo ou RTSP; microfone tem fonte própria')
+        if source.kind not in {'video', 'rtsp', 'browser'}:
+            raise ValueError('Use esta opção numa fonte Vídeo, RTSP ou Web; microfone tem fonte própria')
         enabled = source.id not in self.runtime.audio
         self.runtime.detach(source.id)
-        source.settings['audio'] = enabled
+        source.settings['web_audio' if source.kind == 'browser' else 'audio'] = enabled
         self.runtime.attach(source, self.project.fps)
         self.refresh_lists()
 
@@ -429,7 +444,7 @@ class App:
             if any(source.kind in {'rtsp', 'browser'} for source in self.all_sources()):
                 if not messagebox.askyesno('Projeto', 'Endereços com credenciais/chaves serão guardados em texto. Continuar?'):
                     return
-            self.project.settings.update(geometry=self.root.geometry(), profile=self.profile.get(), zoom=self.zoom.get(), preview=self.studio.preview, program=self.studio.program)
+            self.project.settings.update(geometry=self.root.geometry(), profile=self.profile.get(), zoom=self.zoom.get(), preview=self.studio.preview, program=self.studio.program, panel_sashes=[self.body_panes.sashpos(0), self.body_panes.sashpos(1)], camera_sash=self.workspace.sashpos(0))
             self.project.save(path)
 
     def replace_project(self, project):
@@ -458,6 +473,7 @@ class App:
             if settings.get(key) in ids:
                 setattr(self.studio, key, settings[key])
         self.refresh_lists()
+        self.root.after(100, self.restore_layout)
 
     def new(self):
         if messagebox.askyesno('Novo projeto', 'Criar novo projeto? Guarde primeiro as alterações que pretende manter.'):
@@ -467,6 +483,83 @@ class App:
         path = filedialog.askopenfilename(filetypes=[('Projeto Vision Track', '*.json')])
         if path:
             self.replace_project(Project.load(path))
+
+    def restore_layout(self):
+        if self.closed:
+            return
+        width = max(1080, self.body_panes.winfo_width())
+        sashes = self.project.settings.get('panel_sashes', [235, width - 250])
+        try:
+            if len(sashes) == 2:
+                first = max(180, min(width - 500, int(sashes[0])))
+                second = max(first + 300, min(width - 180, int(sashes[1])))
+                self.body_panes.sashpos(0, first)
+                self.body_panes.sashpos(1, second)
+            height = self.workspace.winfo_height()
+            position = int(self.project.settings.get('camera_sash', height - 255))
+            self.workspace.sashpos(0, max(300, min(height - 200, position)))
+        except (ValueError, TypeError, tk.TclError):
+            pass
+
+    def background(self, fn, complete):
+        result = {}
+        def run():
+            try:
+                result['value'] = fn()
+            except Exception as error:
+                result['error'] = str(error)
+            result['done'] = True
+        threading.Thread(target=run, daemon=True).start()
+        def poll():
+            if self.closed:
+                return
+            if result.get('done'):
+                complete(result)
+            else:
+                self.root.after(100, poll)
+        self.root.after(100, poll)
+
+    def check_updates(self, silent=False):
+        if self.closed or self.update_button.instate(['disabled']) or (silent and self.update_candidate):
+            return
+        from .updates import Updater
+        if self.update_candidate:
+            if self.runtime.outputs:
+                raise ValueError('Pare gravação e transmissão antes de atualizar')
+            self.update_button.configure(state='disabled', text='A descarregar atualização')
+            def downloaded(result):
+                self.update_button.configure(state='normal', text='Baixar atualização')
+                if 'error' in result:
+                    messagebox.showerror('Atualização', result['error'])
+                    return
+                path = result['value']
+                if messagebox.askyesno('Atualização verificada', 'O checksum corresponde à publicação. Fechar o aplicativo e abrir o instalador?'):
+                    import os, subprocess
+                    if os.name != 'nt':
+                        messagebox.showinfo('Atualização', str(path))
+                        return
+                    self.close()
+                    subprocess.Popen([str(path)])
+            self.background(lambda: Updater(__version__).download(self.update_candidate), downloaded)
+            return
+        self.update_button.configure(state='disabled', text='A verificar atualizações')
+        def checked(result):
+            self.update_button.configure(state='normal', text='Verificar atualizações')
+            if 'error' in result:
+                if silent:
+                    return
+                messagebox.showerror('Atualizações', 'Não foi possível consultar o canal independente. Em repositórios privados, configure VISION_TRACK_GITHUB_TOKEN no computador. Nenhum token é incluído no aplicativo.')
+            elif result['value'] is None:
+                if silent:
+                    return
+                messagebox.showinfo('Atualizações', 'Não existe uma versão final mais recente publicada no canal independente. As versões experimentais não são instaladas por este botão.')
+            else:
+                self.update_candidate = result['value']
+                self.update_button.configure(text='Baixar ' + self.update_candidate.version)
+                if silent:
+                    return
+                messagebox.showinfo('Atualização disponível', 'Versão ' + self.update_candidate.version + ' disponível. Clique no botão para descarregar e verificar o instalador.')
+        self.background(lambda: Updater(__version__).check(), checked)
 
     def format_video(self):
         if self.runtime.outputs:
@@ -551,8 +644,12 @@ class App:
         self.root.after(50, check)
 
     def connect_ptz(self):
+        source = self.selected_source()
+        key = source.id if source and source.id in self.runtime.video else self.runtime.selected_camera
+        if key not in self.runtime.video:
+            raise ValueError('Selecione primeiro a fonte de vídeo desta câmera')
         dialog = tk.Toplevel(self.root)
-        dialog.title('Ligação PTZ')
+        dialog.title('Ligação PTZ por câmera')
         fields = {}
         defaults = {'protocol': 'VISCA IP', 'host': '', 'port': '52381', 'address': '1', 'serial': 'COM3', 'baud': '9600', 'username': '', 'password': ''}
         labels = {'protocol': 'Protocolo', 'host': 'IP / host', 'port': 'Porta (ONVIF: 80)', 'address': 'Endereço', 'serial': 'Porta série', 'baud': 'Baud', 'username': 'Utilizador ONVIF', 'password': 'Palavra-passe ONVIF'}
@@ -566,16 +663,19 @@ class App:
                 ttk.Entry(dialog, textvariable=variable, show='*' if key == 'password' else '').grid(row=row, column=1)
         def connect():
             self.disconnect_ptz()
-            self.ptz = PTZSession({key: value.get() for key, value in fields.items()})
+            self.camera_controls.configure(key, {name: value.get() for name, value in fields.items()})
+            self.runtime.selected_camera = key
+            if not self.runtime.routed_source:
+                self.runtime.routed_source = key
+            self.camera_controls.activate(key, allowed=True)
+            self.last_camera = key
             dialog.destroy()
         ttk.Button(dialog, text='Ligar', command=lambda: self.guard(connect)).grid(row=len(defaults), columnspan=2, pady=8)
 
     def disconnect_ptz(self):
         self.follow.set(False)
         self.manual = self.joystick = None
-        if self.ptz:
-            self.ptz.close()
-            self.ptz = None
+        self.camera_controls.deactivate()
 
     def toggle_joystick(self):
         self.follow.set(False)
@@ -653,9 +753,13 @@ class App:
         self.last_tick = start
         frames = self.runtime.frames(start, self.digital.get(), self.profile.get(), self.zoom.get(), dt, self.handoff.get())
         if self.runtime.selected_camera != self.last_camera:
-            if self.last_camera is not None:
-                self.disconnect_ptz()
+            rearm = self.follow.get() and self.handoff.get() and self.ptz_handoff.get()
+            self.disconnect_ptz()
+            self.camera_controls.activate(self.runtime.selected_camera, allowed=rearm)
+            if self.ptz and rearm:
+                self.follow.set(True)
             self.last_camera = self.runtime.selected_camera
+        self.runtime.route_audio = self.audio_handoff.get()
         self.runtime.update_audio(self.studio, start)
         preview = self.studio.compositor.render(self.studio.scene(self.studio.preview), frames)
         program = self.studio.frame(start, frames)

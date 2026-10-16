@@ -5,6 +5,7 @@ from .audio import Mixer, AudioCapture, SystemCapture
 from .capture import video_input, audio_input, WebSource
 from .media import Decoder
 from .vision import VisionWorker, CameraRouter
+from .recovery import RecoveringVideo, RecoveringAudio
 
 
 class Runtime:
@@ -17,6 +18,8 @@ class Runtime:
         self.router = CameraRouter()
         self.selected_camera = None
         self.routed_source = None
+        self.route_active = False
+        self.route_audio = True
         self.stop = threading.Event()
         self.lock = threading.Lock()
         self.monitor = None
@@ -53,12 +56,22 @@ class Runtime:
     def attach(self, source, fps=25):
         try:
             if source.kind == 'browser':
-                self.video[source.id] = WebSource(source.value, (source.width, source.height), source.settings.get('css', ''))
+                self.video[source.id] = WebSource(source.value, (source.width, source.height), source.settings.get('css', ''), audio=source.settings.get('web_audio', True))
+                if source.settings.get('web_audio', True):
+                    self.audio[source.id] = self.video[source.id]
+                    self.mixer.add(source.id, self.video[source.id].buffer)
             elif source.kind in {'video', 'rtsp', 'camera', 'desktop', 'window'}:
-                self.video[source.id] = Decoder(source.value, (source.width, source.height),
-                    input_args=video_input(source.kind, source.value, fps))
+                inputs = video_input(source.kind, source.value, fps)
+                self.video[source.id] = RecoveringVideo(lambda: Decoder(source.value, (source.width, source.height), input_args=inputs))
             if source.kind in {'audio', 'microphone', 'system_audio'} or source.settings.get('audio', source.kind == 'video'):
-                capture = SystemCapture() if source.kind == 'system_audio' else AudioCapture(audio_input(source.kind, source.value))
+                if source.kind == 'system_audio':
+                    import os
+                    if os.name != 'nt':
+                        raise RuntimeError('WASAPI requer Windows')
+                    capture = RecoveringAudio(SystemCapture)
+                else:
+                    arguments = audio_input(source.kind, source.value)
+                    capture = RecoveringAudio(lambda: AudioCapture(arguments))
                 self.audio[source.id] = capture
                 self.mixer.add(source.id, capture.buffer)
         except Exception:
@@ -75,6 +88,9 @@ class Runtime:
             self.audio.pop(key).close()
         if self.selected_camera == key:
             self.selected_camera = None
+        if self.routed_source == key:
+            self.routed_source = None
+            self.route_active = False
 
     def enable_vision(self, key, size=416):
         if key not in self.video:
@@ -88,6 +104,12 @@ class Runtime:
         self.routed_source = key
 
     def frames(self, now, digital=False, profile='Cinema', zoom=2., dt=.04, handoff=False):
+        if not handoff and self.route_active and self.routed_source in self.vision:
+            reference = self.vision[self.selected_camera].snapshot()[3] if self.selected_camera in self.vision else None
+            self.selected_camera = self.routed_source
+            if reference is not None:
+                self.vision[self.selected_camera].adopt(reference)
+        self.route_active = handoff
         frames = {key: decoder.frame() for key, decoder in list(self.video.items())}
         frames = {key: frame for key, frame in frames.items() if frame is not None}
         if handoff and self.selected_camera in self.vision:
@@ -102,7 +124,7 @@ class Runtime:
             _, target, _, _, _ = worker.snapshot()
             worker.framer.profile = profile
             frames[self.selected_camera] = worker.framer.render(frames[self.selected_camera], target.box if target else None, dt, zoom)
-        if handoff and self.routed_source in frames and self.selected_camera in frames:
+        if handoff and self.routed_source and self.selected_camera in frames:
             frames[self.routed_source] = frames[self.selected_camera]
         return frames
 
@@ -112,17 +134,29 @@ class Runtime:
             start, duration, _, previous = studio.transition
             amount = max(0, min(1, (now - start) / duration))
             weights = {previous: 1 - amount, studio.program: amount}
+        source_by_id = {source.id: source for scene in studio.project.scenes for source in scene.sources}
         active = {}
+        settings = {}
         for scene in studio.project.scenes:
+            if scene.id not in weights:
+                continue
             for source in scene.sources:
-                if source.visible and scene.id in weights:
-                    active[source.id] = weights[scene.id]
-                channel = self.mixer.channels.get(source.id)
-                if channel:
-                    channel.active = source.id in active
-                    channel.gain = source.settings.get('gain', 1.) * active.get(source.id, 0)
-                    channel.muted = source.settings.get('mute', False)
-                    channel.settings = dict(source.settings)
+                if not source.visible:
+                    continue
+                destination = source.id
+                if self.route_active and self.route_audio and source.id == self.routed_source:
+                    destination = self.selected_camera
+                if destination not in self.audio:
+                    continue
+                active[destination] = min(1., active.get(destination, 0) + weights[scene.id])
+                # Logical source fader remains in control across camera changes.
+                settings[destination] = source.settings
+        for key, channel in list(self.mixer.channels.items()):
+            options = settings.get(key, source_by_id[key].settings if key in source_by_id else {})
+            channel.active = key in active
+            channel.gain = options.get('gain', 1.) * active.get(key, 0)
+            channel.muted = options.get('mute', False)
+            channel.settings = dict(options)
 
     def add_output(self, key, output):
         with self.lock:

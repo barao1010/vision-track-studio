@@ -52,13 +52,13 @@ jobs:
           & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/windows.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
           Copy-Item docs dist/VisionTrackStudio/docs -Recurse
-          Compress-Archive -Path dist/VisionTrackStudio -DestinationPath dist/Vision-Track-Studio-0.2.0-dev.2-Portable.zip
-          git archive --format=zip --output=dist/Vision-Track-Studio-0.2.0-dev.2-Source.zip HEAD
+          Compress-Archive -Path dist/VisionTrackStudio -DestinationPath dist/Vision-Track-Studio-0.2.0-dev.3-Portable.zip
+          git archive --format=zip --output=dist/Vision-Track-Studio-0.2.0-dev.3-Source.zip HEAD
       - name: Install and test development installer
         shell: pwsh
         run: |
           $installPath = Join-Path $env:RUNNER_TEMP 'VisionTrackStudioInstallTest'
-          $setup = Start-Process dist/Vision-Track-Studio-0.2.0-dev.2-Setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installPath" -PassThru -Wait
+          $setup = Start-Process dist/Vision-Track-Studio-0.2.0-dev.3-Setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installPath" -PassThru -Wait
           if ($setup.ExitCode -ne 0) { throw "Install failed: $($setup.ExitCode)" }
           $app = Start-Process (Join-Path $installPath 'VisionTrackStudio.exe') -ArgumentList '--smoke-test' -PassThru
           if (-not $app.WaitForExit(45000)) { $app.Kill(); throw 'Installed desktop timed out' }
@@ -68,7 +68,7 @@ jobs:
       - name: Upload development packages (not a final Release)
         uses: actions/upload-artifact@v4
         with:
-          name: Vision-Track-Studio-0.2.0-dev.2-Windows
+          name: Vision-Track-Studio-0.2.0-dev.3-Windows
           path: |
             dist/*Setup.exe
             dist/*Portable.zip

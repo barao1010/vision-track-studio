@@ -1,13 +1,13 @@
 [Setup]
 AppId=VisionTrackStudioIndependentDev
 AppName=Vision Track Studio - Desenvolvimento
-AppVersion=0.2.0.2
+AppVersion=0.2.0.3
 AppPublisher=Vision Track Studio
 DefaultDirName={localappdata}\VisionTrackStudioDev
 DefaultGroupName=Vision Track Studio - Desenvolvimento
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=Vision-Track-Studio-0.2.0-dev.2-Setup
+OutputBaseFilename=Vision-Track-Studio-0.2.0-dev.3-Setup
 SetupIconFile=..\assets\vision-track.ico
 UninstallDisplayIcon={app}\VisionTrackStudio.exe
 ArchitecturesAllowed=x64compatible

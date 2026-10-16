@@ -1,2 +1,2 @@
 """Vision Track Studio independent engine."""
-__version__ = '0.2.0-dev.2'
+__version__ = '0.2.0-dev.3'

@@ -216,3 +216,30 @@ class PTZSession:
     def close(self):
         self.stop.set()
         self.worker.join(timeout=2)
+
+
+class CameraControlBank:
+    """Session-only camera mappings. Passwords are never written to project JSON."""
+    def __init__(self, factory=PTZSession):
+        self.factory = factory
+        self.configs = {}
+        self.camera = None
+        self.session = None
+
+    def configure(self, camera, config):
+        self.configs[camera] = dict(config)
+
+    def activate(self, camera, allowed=False):
+        if self.camera == camera and self.session is not None and allowed:
+            return self.session
+        self.deactivate()
+        self.camera = camera
+        if allowed and camera in self.configs:
+            self.session = self.factory(self.configs[camera])
+        return self.session
+
+    def deactivate(self):
+        if self.session:
+            self.session.close()
+        self.session = None
+        self.camera = None

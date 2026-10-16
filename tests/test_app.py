@@ -17,11 +17,21 @@ class DesktopTests(unittest.TestCase):
         app.studio.preview = scene.id
         app.refresh_lists()
         app.studio.take(__import__('time').monotonic(), .1)
+        deadline = __import__('time').monotonic() + 3
         def verify():
-            self.assertTrue(app.camera_view.winfo_ismapped())
-            self.assertGreater(app.program_view.winfo_width(), 100)
+            if app.program_view.winfo_width() <= 100 and __import__('time').monotonic() < deadline:
+                root.after(50, verify)
+                return
+            try:
+                self.assertTrue(app.camera_view.winfo_ismapped())
+                self.assertGreater(app.program_view.winfo_width(), 100)
+                app.project.settings['panel_sashes'] = [260, 1100]
+                app.restore_layout()
+                self.assertEqual(app.body_panes.sashpos(0), 260)
+            finally:
+                app.close()
         root.after(200, verify)
-        root.after(500, app.close)
+        root.after(4000, app.close)
         root.mainloop()
         self.assertEqual(errors, [])
         self.assertFalse(app.runtime.audio_worker.is_alive())

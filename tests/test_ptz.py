@@ -52,3 +52,28 @@ class PTZTests(unittest.TestCase):
         finally:
             session.close()
         self.assertFalse(session.worker.is_alive())
+
+
+class CameraControlTests(unittest.TestCase):
+    def test_handoff_stops_old_camera_before_connecting_new_one(self):
+        from vtrack.ptz import CameraControlBank
+        events = []
+        class Fake:
+            def __init__(self, config):
+                self.name = config['host']
+                events.append(('open', self.name))
+            def close(self): events.append(('stop-close', self.name))
+        bank = CameraControlBank(Fake)
+        bank.configure('a', {'host': 'one'})
+        bank.configure('b', {'host': 'two'})
+        bank.activate('a', allowed=True)
+        bank.activate('b', allowed=True)
+        self.assertEqual(events, [('open', 'one'), ('stop-close', 'one'), ('open', 'two')])
+        bank.activate('a', allowed=False)
+        self.assertIsNone(bank.session)
+        self.assertEqual(events[-1], ('stop-close', 'two'))
+
+    def test_unconfigured_camera_never_inherits_previous_connection(self):
+        from vtrack.ptz import CameraControlBank
+        bank = CameraControlBank(lambda config: self.fail('No configured camera'))
+        self.assertIsNone(bank.activate('missing', allowed=True))

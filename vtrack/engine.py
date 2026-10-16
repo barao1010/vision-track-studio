@@ -31,8 +31,11 @@ class Source:
         if not isinstance(self.settings, dict) or not isinstance(self.value, str):
             raise ValueError('Configuração de fonte inválida')
         for key in ('gain', 'brightness', 'contrast', 'chroma_threshold', 'gate_db', 'compressor_db', 'compressor_ratio', 'delay_ms'):
-            if key in self.settings and not math.isfinite(float(self.settings[key])):
-                raise ValueError('Parâmetro numérico inválido')
+            if key in self.settings:
+                number = float(self.settings[key])
+                if not math.isfinite(number):
+                    raise ValueError('Parâmetro numérico inválido')
+                self.settings[key] = number
         if any(not isinstance(value, int) or isinstance(value, bool) for value in (self.x, self.y, self.width, self.height)):
             raise ValueError('Dimensões e coordenadas devem ser inteiras')
         if self.kind not in {'color', 'image', 'text', 'video', 'rtsp', 'camera', 'desktop', 'window', 'microphone', 'audio', 'system_audio', 'browser'}:

@@ -42,9 +42,12 @@ def audio_input(kind, value):
 
 
 class WebSource:
-    def __init__(self, url, size, css=''):
+    def __init__(self, url, size, css='', audio=True):
         if urlparse(url).scheme not in {'http', 'https'}:
             raise ValueError('Use um endereço HTTP ou HTTPS')
+        from .audio import PCMBuffer
+        self.buffer = PCMBuffer()
+        self.audio_enabled = audio
         self.url, self.size, self.css = url, size, css
         self.latest = None
         self.timestamp = 0
@@ -57,9 +60,13 @@ class WebSource:
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as runtime:
-                browser = runtime.chromium.launch(headless=True)
+                browser = runtime.chromium.launch(headless=True, args=['--autoplay-policy=no-user-gesture-required'])
                 try:
                     page = browser.new_page(viewport={'width': self.size[0], 'height': self.size[1]})
+                    if self.audio_enabled:
+                        from .web_audio import SCRIPT, accept_pcm
+                        page.expose_binding('__visionTrackAudio', lambda source, samples: accept_pcm(self.buffer, samples))
+                        page.add_init_script(SCRIPT)
                     page.goto(self.url, wait_until='domcontentloaded', timeout=8000)
                     if self.css:
                         page.add_style_tag(content=self.css)
@@ -68,7 +75,7 @@ class WebSource:
                         with Image.open(io.BytesIO(data)) as opened:
                             self.latest = opened.convert('RGBA')
                         self.timestamp = time.monotonic()
-                        self.stop.wait(.1)
+                        page.wait_for_timeout(50)
                 finally:
                     browser.close()
         except Exception as error:
