@@ -29,7 +29,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## Incomplete — not an application release
 
-No desktop UI, hardware capture, browser/CSS engine, output encoding, streaming,
+A Windows engineering shell now exercises scene/image controls and preview/program
+cut/fade. It is not the approved delivery UI. No hardware capture, browser/CSS engine, output encoding, streaming,
 encoded recording, resampling, GPU composition, persistence, settings UI, plugin ABI,
 installer, PTZ/AI integration or Bible integration has been implemented in this
 branch yet. CPU reference composition uses nearest-neighbour scaling; it is not
@@ -62,3 +63,7 @@ The core writes raw RGB and float audio. An external FFmpeg TEST TOOL muxes and
 decodes the comparison files; it is not bundled or linked into the product. The
 test environment's FFmpeg may be GPL-enabled. This is not a choice of shipping
 encoder dependency. Review dependencies before creating a distributable app.
+
+UI requirement: reproduce the previously approved Vision Track interface, including
+panel placement/colors/controls; app/windows.cpp is a temporary functional harness,
+not an approved replacement design. Windows tests exercise its real command handler.
