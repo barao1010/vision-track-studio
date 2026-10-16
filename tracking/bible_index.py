@@ -41,6 +41,10 @@ BOOKS = [
     ('1 João','1jo 1 joao primeiro joao primeira joao'),('2 João','2jo 2 joao segundo joao segunda joao'),
     ('3 João','3jo 3 joao terceiro joao terceira joao'),('Judas','jd judas'),('Apocalipse','ap apocalipse')
 ]
+BOOKS += [('Tobias','tob'),('Judite','jdt'),('Ester grego','esg'),('Sabedoria','wis'),
+          ('Eclesiástico','sir'),('Baruque','bar'),('1 Macabeus','1ma'),('2 Macabeus','2ma'),
+          ('1 Esdras','1es'),('Oração de Manassés','prm'),('Salmo adicional','psx'),
+          ('3 Macabeus','3ma'),('4 Esdras','4es'),('4 Macabeus','4ma'),('Daniel grego','dng')]
 # Multiword aliases are constructed explicitly, never split into standalone
 # 'primeiro' or '1', which would misidentify ordinary sermon words.
 ALIASES = {}
@@ -53,7 +57,7 @@ for canonical, aliases in BOOKS:
             if not canonical[0].isdigit(): ALIASES[token] = canonical
     if canonical[0].isdigit():
         number, name = normalize(canonical).split(' ',1)
-        for prefix in [number, {'1':'primeiro','2':'segundo','3':'terceiro'}[number], {'1':'primeira','2':'segunda','3':'terceira'}[number]]:
+        for prefix in [number, {'1':'primeiro','2':'segundo','3':'terceiro','4':'quarto'}[number], {'1':'primeira','2':'segunda','3':'terceira','4':'quarta'}[number]]:
             ALIASES[prefix+' '+name] = canonical
         for token in aliases.split():
             if re.fullmatch(r'\d[a-z]+',token): ALIASES[token] = canonical
@@ -115,17 +119,19 @@ class BibleIndex:
         if not 1 <= len(rows) <= 100000: raise ValueError('Invalid verse count')
         self.verses={}
         self.tokens={}
+        self.texts={}
         for row in rows:
             if not isinstance(row,dict): raise ValueError('Invalid verse row')
             book=ALIASES.get(normalize(row.get('book','')))
             chapter, number = row['chapter'],row['verse']
             text=row['text']
-            if not book or type(chapter) is not int or type(number) is not int or not 1<=chapter<=150 or not 1<=number<=200 or not isinstance(text,str) or not 1<=len(text)<=3000:
+            if not book or type(chapter) is not int or type(number) is not int or not 1<=chapter<=150 or not 1<=number<=200 or not isinstance(text,str) or not 1<=len(text)<=5000:
                 raise ValueError('Invalid verse')
             key=(book,chapter,number)
             if key in self.verses: raise ValueError('Duplicate verse')
             self.verses[key]=Verse(book,chapter,number,text)
-            for token in set(normalize(text).split()): self.tokens.setdefault(token,set()).add(key)
+            self.texts[key]=normalize(text)
+            for token in set(self.texts[key].split()): self.tokens.setdefault(token,set()).add(key)
 
     def reference(self, spoken):
         text=normalize(spoken)
@@ -147,12 +153,12 @@ class BibleIndex:
         scored=[]
         for key in candidates:
             verse=self.verses[key]
-            text=normalize(verse.text)
+            text=self.texts[key]
             tokens=set(text.split())
             overlap=len(words&tokens)/len(words)
             if overlap<.55: continue
             similarity=SequenceMatcher(None,query,text).ratio()
-            score=.65*overlap+.35*similarity
+            score=.99 if len(words)>=6 and len(query)>=25 and query in text else .65*overlap+.35*similarity
             if score>=.72: scored.append((score,verse))
         scored.sort(key=lambda item:(-item[0],item[1].title))
         return scored[:max(1,min(int(limit),10))]

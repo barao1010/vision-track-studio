@@ -80,6 +80,9 @@ if __name__=='__main__':
             SetLogLevel(-1)
             root=Path(getattr(sys,'_MEIPASS',Path(__file__).parent/'models'))
             model=Model(str(root/'speech-model'))
+            default=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))/'data/BPM.json'
+            bundled=BibleIndex(json.loads(default.read_text(encoding='utf-8')))
+            assert bundled.reference('João capítulo três versículo dezesseis').title=='João 3:16'
             recognizer=KaldiRecognizer(model,16000)
             recognizer.AcceptWaveform(bytes(32000))
             assert not json.loads(recognizer.FinalResult()).get('text')

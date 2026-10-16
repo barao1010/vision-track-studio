@@ -11,4 +11,4 @@ O pacote Source contém o código correspondente, scripts de compilação e atri
 
 Vosk API 0.3.45 e vosk-model-small-pt-0.3: Apache-2.0.
 Veja models/LICENSE-VOSK.txt. A distribuição inclui o modelo de fala,
-mas não inclui traduções bíblicas.
+e a Bíblia Portuguesa Mundial (BPM), declarada domínio público pelo editor. Veja LICENSE-BPM.txt no pacote e https://ebible.org/porbrbsl/copyright.htm. O snapshot é um rascunho datado de 13/10/2026.

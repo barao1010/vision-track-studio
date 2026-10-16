@@ -26,6 +26,13 @@ class BibleLookupTests(unittest.TestCase):
         self.assertEqual(result['kind'],'quotation')
         self.assertEqual(result['verse'].title,'Salmos 23:1')
 
+    def test_unique_exact_excerpt_recognizes_a_verse_with_editorial_prefix(self):
+        data=self.document()
+        data['verses'][2]['text']='Título editorial. Uma frase diferente usada para identificar o pastor.'
+        result=BibleIndex(data).resolve('Uma frase diferente usada para identificar o pastor')
+        self.assertEqual(result['kind'],'quotation')
+        self.assertEqual(result['verse'].title,'Salmos 23:1')
+
     def test_ambiguous_quotation_requires_selection(self):
         data=self.document(); row=dict(data['verses'][0]);row['verse']=17;data['verses'].append(row)
         result=BibleIndex(data).resolve(row['text'])

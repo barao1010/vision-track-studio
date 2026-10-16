@@ -63,7 +63,8 @@ jobs:
           python -m PyInstaller --noconfirm --clean --onedir --console --name vision-track-worker --paths tracking --add-data "tracking/models;models" tracking/native_worker.py
           & "dist/vision-track-worker/vision-track-worker.exe" --self-test
           python scripts/prepare_speech_model.py
-          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-bible-worker --paths tracking --collect-all vosk --add-data "tracking/models/speech-model;speech-model" tracking/bible_worker.py
+          python scripts/prepare_default_bible.py
+          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-bible-worker --paths tracking --collect-all vosk --add-data "tracking/models/speech-model;speech-model" --add-data "tracking/data;data" tracking/bible_worker.py
           & "dist/vision-bible-worker/vision-bible-worker.exe" --self-test
       - name: Bundle complete runtime, licenses and source
         shell: pwsh
@@ -73,6 +74,7 @@ jobs:
           Copy-Item vision-track-studio/dist/vision-track-worker "$runtime/bin/64bit/vision-track-worker" -Recurse
           Copy-Item vision-track-studio/dist/vision-bible-worker "$runtime/bin/64bit/vision-bible-worker" -Recurse
           Copy-Item vision-track-studio/tracking/models/LICENSE-VOSK.txt "$runtime/LICENSE-VOSK.txt"
+          Copy-Item vision-track-studio/tracking/data/LICENSE-BPM.txt "$runtime/LICENSE-BPM.txt"
           Copy-Item obs-studio/COPYING "$runtime/COPYING"
           New-Item -ItemType Directory -Force "$runtime/manuals" | Out-Null
           Copy-Item Vision-Track-Studio-Manual-PT.pdf "$runtime/manuals/Vision-Track-Studio-Manual-PT.pdf"

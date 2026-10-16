@@ -69,7 +69,7 @@ uma fonte de texto; resultados ambíguos exigem seleção do operador. O botão
 “Adicionar texto à cena de programa” cria a fonte e as opções nativas permitem
 ajustar posição e estilo. A tradução JSON deve conter `translation`, `license` e
 `verses` com `book`, `chapter`, `verse`, `text`. Metadados de licença importados
-não constituem verificação de direitos. Nenhuma tradução bíblica está incluída.
+não constituem verificação de direitos. A distribuição inclui a Bíblia Portuguesa Mundial (BPM), domínio público, rascunho de 13/10/2026. O snapshot do editor contém 81 livros: 38029 entradas com texto e 29 entradas vazias, mantidas como indisponíveis sem inventar conteúdo. Traduções adicionais podem ser importadas quando autorizadas.
 
 O modelo português é `vosk-model-small-pt-0.3`, Apache-2.0 segundo o catálogo
 oficial https://alphacephei.com/vosk/models. O download é verificado por SHA-256

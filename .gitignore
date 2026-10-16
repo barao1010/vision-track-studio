@@ -18,3 +18,5 @@ __pycache__/
 /validation/results/
 
 /tracking/models/speech-model/
+
+/tracking/data/

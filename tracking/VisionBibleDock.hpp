@@ -141,7 +141,7 @@ public:
         auto *layout = new QFormLayout(body);
         bible = new QLineEdit(body);
         QSettings saved("VisionTrack", "StudioBible");
-        bible->setText(saved.value("bible").toString());
+        bible->setText(saved.value("bible", QApplication::applicationDirPath()+"/vision-bible-worker/_internal/data/BPM.json").toString());
         auto *browse = new QPushButton(QStringLiteral("Importar tradução JSON"), body);
         sources = new QComboBox(body);
         auto *refresh = new QPushButton(QStringLiteral("Atualizar fontes de áudio"), body);
@@ -152,7 +152,7 @@ public:
         candidates = new QListWidget(body);
         auto *show = new QPushButton(QStringLiteral("Exibir passagem selecionada"), body);
         auto *add = new QPushButton(QStringLiteral("Adicionar texto à cena de programa"), body);
-        status = new QLabel(QStringLiteral("Importe apenas uma tradução que tenha autorização para utilizar."), body);
+        status = new QLabel(QStringLiteral("BPM incluída: tradução em domínio público, ainda em revisão. Pode importar outra tradução autorizada."), body);
         status->setWordWrap(true);
         layout->addRow(bible); layout->addRow(browse); layout->addRow(sources); layout->addRow(refresh);
         layout->addRow(start); layout->addRow(automatic); layout->addRow(transcript);
