@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [independent-engine]
 permissions:
-  contents: read
+  contents: write
 jobs:
   windows:
     runs-on: windows-latest
@@ -75,3 +75,13 @@ jobs:
             dist/*Source.zip
             docs/Vision-Track-Studio-Manual-PT.pdf
             assets/desktop.png
+
+      - name: Publish explicitly marked development download
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "independent-v0.2.0-dev.3-build.${{ github.run_number }}"
+          gh release create $tag --target "${{ github.sha }}" --prerelease --title "Vision Track Studio 0.2.0-dev.3 - teste independente" --notes "Versão de desenvolvimento para testes do utilizador. Não é versão final nem equivalência completa. Câmeras e joystick físicos não validados. Requer FFmpeg externo." dist/*Setup.exe dist/*Portable.zip dist/*Source.zip docs/Vision-Track-Studio-Manual-PT.pdf
+          if ($LASTEXITCODE -ne 0) { throw 'Development release upload failed' }
