@@ -9,6 +9,9 @@
 #include "core.hpp"
 #include "windows_desktop.hpp"
 #include "windows_recording.hpp"
+#include "windows_microphone.hpp"
+#include "audio_buffer.hpp"
+#include <numbers>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -17,35 +20,54 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
 std::unique_ptr<Switcher> program;
 int selected=0,serial=0;
-bool smoke=false;
+bool smoke=false, smokeAudio=false;
+std::unique_ptr<WindowsMicrophone> microphone;
 int smokeStep=0;
 std::unique_ptr<WindowsRecorder> recorder;
 std::int64_t recordStart=0, recordFrames=0;
 void recordFrame(const Frame& frame) {
     AudioBlock silence{recordFrames*1600,2,std::vector<float>(3200,0)};
-    recorder->append(frame,silence);++recordFrames;
+    if(microphone) {
+        silence=microphone->read(audio_sample_time(recordStart)+recordFrames*1600,1600);
+        silence.start_sample=recordFrames*1600;
+    } else if(smokeAudio) {
+        for(int i=0;i<1600;++i) {
+            float value=static_cast<float>(.2*std::sin(2*std::numbers::pi*440*(silence.start_sample+i)/48000));
+            silence.samples[2*i]=value;silence.samples[2*i+1]=value;
+        }
+    }
+    const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
+    auto output=mix(silence.start_sample,1600,2,{{&silence,1,muted}});
+    recorder->append(frame,output.block);++recordFrames;
 }
 void startRecording(const std::filesystem::path& path);
 void stopRecording() {
     if(!recorder) return;
     auto finishing=std::move(recorder);
-    SetWindowText(GetDlgItem(window,Record),L"Gravar MP4 (sem audio)");
+    microphone.reset();
+    EnableWindow(GetDlgItem(window,UseMic),TRUE);
+    SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
     finishing->finish();
 }
 
 std::int64_t now() {return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
 void startRecording(const std::filesystem::path& path) {
     if(recorder) throw std::logic_error("Recording already active");
+    std::unique_ptr<WindowsMicrophone> capture;
+    if(SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED)
+        capture=std::make_unique<WindowsMicrophone>();
     auto starting=std::make_unique<WindowsRecorder>(path,640,360,30);
+    microphone=std::move(capture);
+    EnableWindow(GetDlgItem(window,UseMic),FALSE);
     recordStart=now();recordFrames=0;recorder=std::move(starting);
     recordFrame(program->render(recordStart));
-    SetWindowText(GetDlgItem(window,Record),L"Parar gravacao");
+    SetWindowText(GetDlgItem(window,Record),microphone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
 void captureRecording(std::int64_t timestamp) {
     if(!recorder) return;
@@ -94,7 +116,7 @@ Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(ind
 void command(int id) {
     if(id==Record) {
         if(recorder) {stopRecording();return;}
-        if(smoke) {startRecording(L"gui-recording.mp4");return;}
+        if(smoke) {startRecording(smokeAudio?L"gui-audio.mp4":L"gui-recording.mp4");return;}
         wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;
         ofn.lpstrFilter=L"Video MP4\0*.mp4\0";ofn.lpstrDefExt=L"mp4";
         ofn.Flags=OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
@@ -146,8 +168,10 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Capturar tela",AddDesktop,15,525,180,30);
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
-            control(L"BUTTON",L"Gravar MP4 (sem audio)",Record,560,240,320,35);
-            control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera, microfone e transmissao pendentes.",0,220,300,660,50);
+            control(L"BUTTON",L"Gravar MP4",Record,560,240,320,35);
+            control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera e transmissao pendentes. Sem microfone se a caixa estiver desmarcada.",0,220,300,660,50);
+            control(L"BUTTON",L"Gravar microfone padrao",UseMic,220,360,260,30,BS_AUTOCHECKBOX);
+            control(L"BUTTON",L"Silenciar audio",Mute,500,360,240,30,BS_AUTOCHECKBOX);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
@@ -155,14 +179,15 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         case WM_TIMER:
             if(smoke) {
                 if(smokeStep==0) {addSource(Frame(2,2,{1,0,0,1}));SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(2,2,{0,0,1,1}));SendMessage(hwnd,WM_COMMAND,Fade,0);}
-                if(smokeStep==20) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop\n";DestroyWindow(hwnd);return 0;}
+                if(smokeAudio && smokeStep==40) SendMessage(GetDlgItem(hwnd,Mute),BM_SETCHECK,BST_CHECKED,0);
+                if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
             captureRecording(now());
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
-        case WM_DESTROY: recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
+        case WM_DESTROY: microphone.reset();recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
         // An output failure ends this session; do not retry partial samples.
@@ -175,6 +200,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
 }
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
+    smokeAudio=std::wstring(cmd).find(L"--self-test-gui-audio")!=std::wstring::npos;
     smoke=std::wstring(cmd).find(L"--self-test-gui")!=std::wstring::npos;
     if(FAILED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED))) return 1;
     if(FAILED(MFStartup(MF_VERSION))) {CoUninitialize();return 1;}

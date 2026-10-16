@@ -31,14 +31,14 @@ ctest --test-dir build -C Release --output-on-failure
 
 A Windows engineering shell now exercises scene/image controls and preview/program
 cut/fade, desktop capture and silent MP4 recording. It is not the approved delivery
-UI. No webcam/microphone capture, browser/CSS engine, streaming,
+UI. No webcam capture, browser/CSS engine, streaming,
 GPU composition, persistence, settings UI, plugin ABI,
 installer, PTZ/AI integration or Bible integration has been implemented in this
 branch yet. CPU reference composition uses nearest-neighbour scaling; it is not
 performance-equivalent to OBS. Tests validate this core's explicit contracts,
 not full OBS parity. Do not ship this as an OBS replacement.
 
-Next: implement live camera/microphone capture, source lifecycle and scheduling,
+Next: validate microphone hardware, implement camera capture, source lifecycle and scheduling,
 then connect the independently tested core to the approved desktop interface.
 Review each dependency's exact build and redistribution terms before integration.
 No conclusion about licensing of a future complete app follows from core tests.
@@ -81,7 +81,7 @@ H.264/AAC MP4 output. A three-second recording test decodes all 90 frames and
 checks top/bottom orientation, timestamps, stereo audio duration, 440Hz frequency
 and amplitude. The first run found vertical inversion; the row-order correction
 passed Windows CI run 38934171835. The engineering window now uses this recorder,
-but microphone/camera integration and the streaming pipeline remain absent.
+with optional default-microphone capture; camera integration and streaming remain absent.
 
 ### Audio rate conversion
 
@@ -99,8 +99,8 @@ not evidence of live device synchronization or complete OBS equivalence.
 
 The engineering window now connects its MP4 start/stop button to the program
 output, including scene transitions and image/desktop sources. It explicitly
-labels recording as **without audio** until live capture is connected; the file
-contains a silent AAC track. A monotonic clock drives the 30 fps timeline,
+offers an optional default-microphone checkbox and a mute control. Without
+that checkbox, the file contains a silent AAC track. A monotonic clock drives the 30 fps timeline,
 repeating the current frame when the UI falls behind and stopping on a stall
 over ten seconds. This synchronous path is not yet a production capture scheduler.
 The GUI smoke test starts and stops a recording through WM_COMMAND; CI decodes
@@ -110,3 +110,10 @@ The approved final interface has not yet replaced this engineering window.
 Windows CI run 38935120740 passed the GUI recording decode check: 28 H.264
 frames with red-to-blue fade, 30 fps timestamps and a silent AAC track.
 See `docs/DEVELOPMENT_STATE.md` for the concrete checkpoint and remaining work.
+
+`platform/windows_microphone.cpp` adds an original WASAPI capture worker using
+installed Windows APIs. It converts mono/stereo float input through the core rate
+converter and feeds the mixer and MP4 recorder through a bounded timestamped
+history. Input errors/disconnections stop recording visibly. This implementation
+still needs physical-device and long-duration synchronization validation; the
+synthetic GUI tone/mute fixture is explicitly not a microphone hardware test.

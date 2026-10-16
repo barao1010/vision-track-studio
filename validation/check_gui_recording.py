@@ -22,6 +22,14 @@ with av.open(path) as recording:
     assert stream.codec_context.sample_rate == 48000
     assert stream.codec_context.channels == 2
     samples = np.concatenate([f.to_ndarray() for f in recording.decode(audio=0)], axis=1)
-assert np.max(np.abs(samples)) < 1e-6
+if '--tone' in sys.argv:
+    active = samples[0, 4800:24000]
+    assert abs(float(np.sqrt(np.mean(active**2))) - .2 / np.sqrt(2)) < .01
+    spectrum = np.abs(np.fft.rfft(active))
+    frequency = np.fft.rfftfreq(len(active), 1 / 48000)[np.argmax(spectrum)]
+    assert abs(frequency - 440) < 3, frequency
+    assert np.max(np.abs(samples[:, -4800:])) < .001, 'Mute did not reach encoded audio'
+else:
+    assert np.max(np.abs(samples)) < 1e-6
 assert abs(samples.shape[1] / 48000 - len(frames) / 30) < .05
-print(f'PASS: GUI recording, {len(frames)} H264 frames, red-to-blue fade, timestamps, explicit silent AAC track')
+print(f'PASS: GUI recording, {len(frames)} H264 frames, red-to-blue fade, timestamps, AAC tone/mute pipeline' if '--tone' in sys.argv else f'PASS: GUI recording, {len(frames)} H264 frames, red-to-blue fade, timestamps, silent AAC')

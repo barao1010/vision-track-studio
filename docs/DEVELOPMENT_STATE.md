@@ -47,3 +47,17 @@ not make OBS a product dependency.
 No installer or complete application is ready. No public streams were started.
 The previous approved screenshot was inspected as a visual reference; it has
 not been bundled into the app or used as fake functional UI.
+
+## Microphone integration increment (validation in progress)
+
+Added a Windows WASAPI worker for the default mono/stereo capture endpoint. It
+requests float PCM at the device mix rate, uses the independent sinc converter
+for 48 kHz output, duplicates mono into stereo, and timestamps a bounded history
+using WASAPI QPC timestamps mapped to the application's monotonic clock. Capture
+must be explicitly selected in the engineering window. Device loss, discontinuity,
+missing timestamps and timeouts fail visibly; no automatic device substitution.
+The mixer mute control now reaches recorded AAC audio. A separate synthetic GUI
+fixture tests the signal path and mute without claiming a physical microphone test.
+Physical microphones, device switching, clock drift correction and long-running
+A/V synchronization remain unvalidated. The recording path still waits on audio
+on the UI thread; moving output off that thread remains necessary.
