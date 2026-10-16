@@ -30,7 +30,7 @@ ctest --test-dir build -C Release --output-on-failure
 ## Incomplete — not an application release
 
 A Windows engineering shell now exercises scene/image controls and preview/program
-cut/fade, desktop capture and silent MP4 recording. It is not the approved delivery
+cut/fade, desktop capture and MP4 recording with optional default-microphone audio. It is not the approved delivery
 UI. No webcam capture, browser/CSS engine, streaming,
 GPU composition, persistence, settings UI, plugin ABI,
 installer, PTZ/AI integration or Bible integration has been implemented in this
@@ -99,7 +99,7 @@ not evidence of live device synchronization or complete OBS equivalence.
 
 The engineering window now connects its MP4 start/stop button to the program
 output, including scene transitions and image/desktop sources. It explicitly
-offers an optional default-microphone checkbox and a mute control. Without
+offers an optional default-microphone checkbox, gain slider, output peak meter and mute control. Without
 that checkbox, the file contains a silent AAC track. A monotonic clock drives the 30 fps timeline,
 repeating the current frame when the UI falls behind and stopping on a stall
 over ten seconds. This synchronous path is not yet a production capture scheduler.

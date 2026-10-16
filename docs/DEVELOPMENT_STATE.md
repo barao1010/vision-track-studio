@@ -27,9 +27,9 @@ not make OBS a product dependency.
 
 ## Next implementation work
 
-1. Live microphone/camera adapters, device selection, disconnect recovery and
-   threading. Route microphone PCM through the rate converter and mixer before
-   recording. The GUI currently says "sem audio" because no microphone is wired.
+1. Camera capture, device selection, disconnect recovery and output threading.
+   The default WASAPI microphone is now wired through the rate converter, mixer
+   and recorder; validate physical devices and long-duration synchronization.
 2. Replace the engineering window with the approved interface. The approved
    reference is a dark 1536×1024 layout: scenes upper left, large preview beside
    it, smaller program/transition center-right, mixer and controls far right;
@@ -48,7 +48,7 @@ No installer or complete application is ready. No public streams were started.
 The previous approved screenshot was inspected as a visual reference; it has
 not been bundled into the app or used as fake functional UI.
 
-## Microphone integration increment (validation in progress)
+## Microphone integration increment
 
 Added a Windows WASAPI worker for the default mono/stereo capture endpoint. It
 requests float PCM at the device mix rate, uses the independent sinc converter
@@ -56,8 +56,18 @@ for 48 kHz output, duplicates mono into stereo, and timestamps a bounded history
 using WASAPI QPC timestamps mapped to the application's monotonic clock. Capture
 must be explicitly selected in the engineering window. Device loss, discontinuity,
 missing timestamps and timeouts fail visibly; no automatic device substitution.
-The mixer mute control now reaches recorded AAC audio. A separate synthetic GUI
+Mixer gain (-60 to +12 dB), mute and the output peak meter are connected to recording. A separate synthetic GUI
 fixture tests the signal path and mute without claiming a physical microphone test.
 Physical microphones, device switching, clock drift correction and long-running
 A/V synchronization remain unvalidated. The recording path still waits on audio
 on the UI thread; moving output off that thread remains necessary.
+
+Commit `7167d44` passed Windows/Linux/comparison run 38937548432: eight Windows
+contracts, decoded native tone fixture, silent GUI fixture (29 frames), and
+synthetic GUI audio/mute fixture (85 frames). No physical capture endpoint was
+opened by the GUI fixtures. The microphone code compiled; these results do not
+prove hardware operation. The follow-up gain test checks +6 dB in decoded AAC.
+
+Commit `7d52ba8` passed all jobs in run 38937789984, including decoded +6 dB
+signal amplitude and mute in the GUI recording. Keep the fixed thresholds in
+`validation/check_gui_recording.py`; this is not a physical-device test.
