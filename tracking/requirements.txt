@@ -1,6 +1,0 @@
-opencv-contrib-python>=4.10,<5
-requests>=2.31,<3
-
-pyserial>=3.5,<4
-
-vosk==0.3.45
