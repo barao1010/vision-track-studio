@@ -11,6 +11,21 @@ jobs:
       - run: cmake -S . -B build
       - run: cmake --build build --config Release
       - run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Windows'
+        with:
+          python-version: '3.12'
+      - run: python -m pip install av==16.0.1 numpy==2.3.5
+        if: runner.os == 'Windows'
+      - run: python validation/check_native_recording.py build/native-recording.mp4
+        if: runner.os == 'Windows'
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows' && always()
+        with:
+          name: windows-native-recording-validation
+          path: |
+            build/native-recording.mp4
+            build/Testing/Temporary/LastTest.log
   recorded-comparison:
     runs-on: ubuntu-latest
     permissions:
