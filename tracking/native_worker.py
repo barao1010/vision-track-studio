@@ -222,7 +222,15 @@ def appearance(frame, box):
 
 
 if __name__ == "__main__":
-    if "--self-test" in sys.argv:
+    if "--update-check" in sys.argv or "--update-download" in sys.argv:
+        from update_service import check, download
+        try:
+            result=check(int(sys.argv[2])) if sys.argv[1]=="--update-check" else download(sys.argv[2],sys.argv[3])
+            emit(**result)
+        except Exception:
+            emit(error=True,status="Não foi possível verificar a atualização.")
+            sys.exit(1)
+    elif "--self-test" in sys.argv:
         assert PersonDetector().detect(np.zeros((360, 640, 3), dtype=np.uint8)) == []
         emit(status="Packaged AI model and runtime verified.")
     else:

@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install av==16.0.1 numpy==2.2.6
+      - run: python -m pip install av==16.0.1 numpy==2.2.6 websocket-client==1.8.0
       - run: python -m unittest discover -s validation -p 'test_*.py' -v
   exercise:
     needs: validator-tests
@@ -62,6 +62,7 @@ jobs:
       - name: Record identical scene, browser, image and audio exercise
         shell: pwsh
         run: |
+          $env:VTS_DISABLE_UPDATE_CHECK = '1'
           $binary = if ('${{ matrix.flavor }}' -eq 'vision') { 'vision-track-studio.exe' } else { 'obs64.exe' }
           $exe = Resolve-Path "obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/$binary"
           $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList '--portable', '--disable-updater', '--disable-shutdown-check', '--profile', 'Parity', '--collection', 'Parity' -PassThru
@@ -93,7 +94,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install av==16.0.1 numpy==2.2.6
+      - run: python -m pip install av==16.0.1 numpy==2.2.6 websocket-client==1.8.0
       - uses: actions/download-artifact@v4
         with:
           pattern: parity-*

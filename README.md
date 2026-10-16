@@ -55,7 +55,7 @@ câmera USB/placa de captura. Escolha uma fonte em “Fonte de vídeo do OBS”.
 No modo fixo, o recorte digital acompanha o alvo na pré-visualização e no
 programa e restaura o enquadramento ao parar.
 
-Bíblia por voz: painel, captura da fonte OBS e worker offline integrados em código; validação de voz real pendente. Atualização automática continua pendente nesta linha nativa.
+Bíblia por voz: painel, captura da fonte OBS e worker offline integrados em código; validação de voz real pendente. Verificação automática de atualização e instalação pelo botão integradas em código; validação de atualização real pendente.
 Câmeras, áudio, transmissão e associação visual exigem validação real.
 A recuperação não é uma entrega completa. O pipeline exige agora uma janela
 Windows responsiva além de `--version`; isso não comprova produção audiovisual.
@@ -75,3 +75,13 @@ O modelo português é `vosk-model-small-pt-0.3`, Apache-2.0 segundo o catálogo
 oficial https://alphacephei.com/vosk/models. O download é verificado por SHA-256
 e a licença acompanha a distribuição. O teste do worker verifica carregamento
 e silêncio; não prova reconhecimento de sermões nem precisão de citações.
+
+### Atualizações nativas — integração em validação
+
+O aplicativo verifica o canal próprio ao iniciar e apresenta um botão quando há
+um instalador nativo mais recente com digest SHA-256 no GitHub. O download é
+verificado antes de executar o instalador. Versões do motor independente,
+assets sem digest e endereços de outros repositórios são rejeitados. Instalação
+é bloqueada com transmissão, gravação, replay ou câmera virtual em execução.
+Ainda é necessário validar o ciclo de atualização completo no Windows com
+uma release nativa nova. Nenhum token do proprietário é distribuído ao cliente.

@@ -34,15 +34,27 @@ class OBSClient:
         self.socket.send(json.dumps({'op':1,'d':identify}))
         assert json.loads(self.socket.recv())['op'] == 2
 
-    def call(self, name, **data):
+    def _call_once(self, name, **data):
         request_id = str(uuid.uuid4())
         self.socket.send(json.dumps({'op':6,'d':{'requestType':name,'requestId':request_id,'requestData':data}}))
         while True:
             message=json.loads(self.socket.recv())
             if message['op'] == 7 and message['d']['requestId'] == request_id:
                 response=message['d']
-                assert response['requestStatus']['result'], (name,response['requestStatus'])
-                return response.get('responseData',{})
+                return response
+
+    def call(self, name, **data):
+        deadline=time.monotonic()+30
+        while True:
+            response=self._call_once(name,**data)
+            status=response['requestStatus']
+            if status['result']: return response.get('responseData',{})
+            # Code 207 means initialization has not finished; no action ran.
+            # Other failures remain hard failures rather than being retried.
+            if status.get('code')==207 and time.monotonic()<deadline:
+                time.sleep(.2)
+                continue
+            raise AssertionError((name,status))
 
     def close(self):
         self.socket.close()

@@ -12,6 +12,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
+CloseApplications=yes
+RestartApplications=yes
 LicenseFile=..\..\obs-studio\COPYING
 SetupIconFile=..\..\obs-studio\frontend\cmake\windows\obs-studio.ico
 [Files]
