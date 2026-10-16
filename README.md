@@ -67,3 +67,31 @@ encoder dependency. Review dependencies before creating a distributable app.
 UI requirement: reproduce the previously approved Vision Track interface, including
 panel placement/colors/controls; app/windows.cpp is a temporary functional harness,
 not an approved replacement design. Windows tests exercise its real command handler.
+
+## Windows platform progress
+
+`platform/windows_desktop.cpp` captures desktop pixels using Windows GDI and is
+connected to the engineering shell's source list. The Windows contract test
+creates a colored window and checks captured pixels. This is not webcam capture
+or a substitute for testing protected content, multiple monitors, DPI or latency.
+
+`platform/windows_recording.cpp` uses installed Media Foundation encoders for
+H.264/AAC MP4 output. A three-second recording test decodes all 90 frames and
+checks top/bottom orientation, timestamps, stereo audio duration, 440Hz frequency
+and amplitude. The first run found vertical inversion; a row-order correction
+is being validated. The recorder is not yet wired to the user-facing record
+button, microphone or camera, and is not a complete streaming pipeline.
+
+### Audio rate conversion
+
+`AudioRateConverter` is original C++20 code with no third-party dependency. It
+converts contiguous mono/stereo float PCM between 8–192 kHz using a 64-tap
+windowed-sinc filter, a rational sample clock and 32 source frames of lookahead.
+It preserves output timestamps across input packet boundaries, suppresses
+out-of-band energy when downsampling, and flushes the final edge without adding
+stream duration (the final output frame count rounds up). It does not implement
+clock-drift correction, microphone capture or multichannel layout conversion.
+Tests compare the output against an analytic 440 Hz waveform, verify 44.1→48 kHz
+chunk invariance, stereo isolation, 48→16 kHz passband/alias rejection, identity,
+short/empty streams and malformed packets. These are signal-processing contracts,
+not evidence of live device synchronization or complete OBS equivalence.

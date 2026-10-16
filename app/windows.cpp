@@ -117,7 +117,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                 ++smokeStep;
             }
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
-        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}EndPaint(hwnd,&ps);return 0;}
+        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_DESTROY: KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
