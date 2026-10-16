@@ -3,6 +3,7 @@
 #define _UNICODE
 #include <windows.h>
 #include <commdlg.h>
+#include <commctrl.h>
 #include <wincodec.h>
 #include <mfapi.h>
 #include <wrl/client.h>
@@ -20,7 +21,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -43,7 +44,13 @@ void recordFrame(const Frame& frame) {
         }
     }
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
-    auto output=mix(silence.start_sample,1600,2,{{&silence,1,muted}});
+    const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
+    const float gain=std::pow(10.f,db/20.f);
+    auto output=mix(silence.start_sample,1600,2,{{&silence,gain,muted}});
+    std::wstring level=L"Nivel: ";
+    if(output.meter.peak>0) level+=std::to_wstring(static_cast<int>(std::lround(20*std::log10(output.meter.peak))))+L" dBFS";
+    else level+=L"silencio";
+    SetWindowText(GetDlgItem(window,MeterLabel),level.c_str());
     recorder->append(frame,output.block);++recordFrames;
 }
 void startRecording(const std::filesystem::path& path);
@@ -114,6 +121,7 @@ void addScene() {
 }
 Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(index==LB_ERR) return nullptr;return &scenes[selected]->item(ids[selected].at(static_cast<std::size_t>(index)));}
 void command(int id) {
+    if(id==UseMic || id==Mute) return;
     if(id==Record) {
         if(recorder) {stopRecording();return;}
         if(smoke) {startRecording(smokeAudio?L"gui-audio.mp4":L"gui-recording.mp4");return;}
@@ -154,7 +162,7 @@ void verify(bool ok) {if(!ok) throw std::runtime_error("GUI action contract fail
 LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     try {
         switch(msg) {
-        case WM_CREATE:
+        case WM_CREATE: {
             window=hwnd;
             control(L"STATIC",L"Cenas",0,15,15,180,25);
             scenesBox=control(L"LISTBOX",L"",SceneList,15,40,180,150,LBS_NOTIFY|WS_BORDER|WS_VSCROLL);
@@ -172,7 +180,12 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera e transmissao pendentes. Sem microfone se a caixa estiver desmarcada.",0,220,300,660,50);
             control(L"BUTTON",L"Gravar microfone padrao",UseMic,220,360,260,30,BS_AUTOCHECKBOX);
             control(L"BUTTON",L"Silenciar audio",Mute,500,360,240,30,BS_AUTOCHECKBOX);
-            addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;
+            control(L"STATIC",L"Ganho do microfone (-60 a +12 dB)",0,220,405,300,25);
+            auto gainSlider=control(TRACKBAR_CLASS,L"",Gain,220,435,300,30,TBS_AUTOTICKS);
+            SendMessage(gainSlider,TBM_SETRANGE,TRUE,MAKELPARAM(-60,12));
+            SendMessage(gainSlider,TBM_SETPOS,TRUE,smokeAudio?6:0);
+            control(L"STATIC",L"Nivel: aguardando gravacao",MeterLabel,540,435,300,30);
+            addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
@@ -204,6 +217,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     smoke=std::wstring(cmd).find(L"--self-test-gui")!=std::wstring::npos;
     if(FAILED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED))) return 1;
     if(FAILED(MFStartup(MF_VERSION))) {CoUninitialize();return 1;}
+    INITCOMMONCONTROLSEX common{sizeof(INITCOMMONCONTROLSEX),ICC_BAR_CLASSES};
+    if(!InitCommonControlsEx(&common)) {MFShutdown();CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
     if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
     HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,590,nullptr,nullptr,instance,nullptr);

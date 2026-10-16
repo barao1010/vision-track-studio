@@ -6,6 +6,9 @@ using namespace vision;
 void check(bool ok) {if(!ok) throw std::runtime_error("Audio history contract failed");}
 template<class F> void rejects(F f) {bool failed=false;try {f();}catch(const std::exception&) {failed=true;}check(failed);}
 int main() {
+    AudioHistory late(5);
+    late.append({48000,2,{.5f,-.5f}});
+    check(late.read(47998,3).samples==std::vector<float>({0,0,0,0,.5f,-.5f}));
     AudioHistory history(5);
     history.append({0,2,{1,-1,2,-2}});
     history.append({3,2,{3,-3}});

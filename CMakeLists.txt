@@ -58,7 +58,7 @@ if(WIN32)
   add_library(vision_windows_microphone platform/windows_microphone.cpp)
   target_include_directories(vision_windows_microphone PUBLIC platform)
   target_link_libraries(vision_windows_microphone PUBLIC vision_core ole32 uuid)
-  target_link_libraries(vision_studio PRIVATE vision_windows_microphone)
+  target_link_libraries(vision_studio PRIVATE vision_windows_microphone comctl32)
 endif()
 
 if(WIN32)

@@ -24,7 +24,7 @@ with av.open(path) as recording:
     samples = np.concatenate([f.to_ndarray() for f in recording.decode(audio=0)], axis=1)
 if '--tone' in sys.argv:
     active = samples[0, 4800:24000]
-    assert abs(float(np.sqrt(np.mean(active**2))) - .2 / np.sqrt(2)) < .01
+    assert abs(float(np.sqrt(np.mean(active**2))) - .2 * 10**(6 / 20) / np.sqrt(2)) < .01
     spectrum = np.abs(np.fft.rfft(active))
     frequency = np.fft.rfftfreq(len(active), 1 / 48000)[np.argmax(spectrum)]
     assert abs(frequency - 440) < 3, frequency
