@@ -4,9 +4,11 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <wincodec.h>
+#include <mfapi.h>
 #include <wrl/client.h>
 #include "core.hpp"
 #include "windows_desktop.hpp"
+#include "windows_recording.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -15,7 +17,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -23,7 +25,37 @@ std::unique_ptr<Switcher> program;
 int selected=0,serial=0;
 bool smoke=false;
 int smokeStep=0;
+std::unique_ptr<WindowsRecorder> recorder;
+std::int64_t recordStart=0, recordFrames=0;
+void recordFrame(const Frame& frame) {
+    AudioBlock silence{recordFrames*1600,2,std::vector<float>(3200,0)};
+    recorder->append(frame,silence);++recordFrames;
+}
+void startRecording(const std::filesystem::path& path);
+void stopRecording() {
+    if(!recorder) return;
+    auto finishing=std::move(recorder);
+    SetWindowText(GetDlgItem(window,Record),L"Gravar MP4 (sem audio)");
+    finishing->finish();
+}
+
 std::int64_t now() {return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+void startRecording(const std::filesystem::path& path) {
+    if(recorder) throw std::logic_error("Recording already active");
+    auto starting=std::make_unique<WindowsRecorder>(path,640,360,30);
+    recordStart=now();recordFrames=0;recorder=std::move(starting);
+    recordFrame(program->render(recordStart));
+    SetWindowText(GetDlgItem(window,Record),L"Parar gravacao");
+}
+void captureRecording(std::int64_t timestamp) {
+    if(!recorder) return;
+    const auto due=(timestamp-recordStart)*30/1000000000+1;
+    if(due-recordFrames>300) throw std::runtime_error("Recording stopped: capture stalled for over ten seconds");
+    if(due>recordFrames) {
+        auto frame=program->render(timestamp);
+        while(recordFrames<due) recordFrame(frame);
+    }
+}
 void hr(HRESULT r) {if(FAILED(r)) throw std::runtime_error("Windows image decoder failed");}
 float linear(BYTE b) {float s=b/255.f;return s<=.04045f?s/12.92f:std::pow((s+.055f)/1.055f,2.4f);}
 BYTE encoded(float l) {l=std::clamp(l,0.f,1.f);return static_cast<BYTE>(std::lround(255*(l<=.0031308f?12.92f*l:1.055f*std::pow(l,1.f/2.4f)-.055f)));}
@@ -60,7 +92,16 @@ void addScene() {
 }
 Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(index==LB_ERR) return nullptr;return &scenes[selected]->item(ids[selected].at(static_cast<std::size_t>(index)));}
 void command(int id) {
-    if(id==AddScene) addScene();
+    if(id==Record) {
+        if(recorder) {stopRecording();return;}
+        if(smoke) {startRecording(L"gui-recording.mp4");return;}
+        wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;
+        ofn.lpstrFilter=L"Video MP4\0*.mp4\0";ofn.lpstrDefExt=L"mp4";
+        ofn.Flags=OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
+        // The recorder refuses existing files; never silently overwrite a recording.
+        if(GetSaveFileName(&ofn)) startRecording(path);
+    }
+    else if(id==AddScene) addScene();
     else if(id==AddDesktop) {
         auto key="Tela "+std::to_string(++serial);
         scenes[selected]->add({key,std::make_shared<DesktopSource>(),0,0,640,360,{}});
@@ -105,6 +146,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Capturar tela",AddDesktop,15,525,180,30);
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
+            control(L"BUTTON",L"Gravar MP4 (sem audio)",Record,560,240,320,35);
             control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera, microfone e transmissao pendentes.",0,220,300,660,50);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;
         case WM_COMMAND:
@@ -112,15 +154,19 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
         case WM_TIMER:
             if(smoke) {
-                if(smokeStep==0) {addSource(Frame(2,2,{1,0,0,1}));SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(2,2,{0,0,1,1}));SendMessage(hwnd,WM_COMMAND,Fade,0);}
-                if(smokeStep==20) {verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal\n";DestroyWindow(hwnd);return 0;}
+                if(smokeStep==0) {addSource(Frame(2,2,{1,0,0,1}));SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(2,2,{0,0,1,1}));SendMessage(hwnd,WM_COMMAND,Fade,0);}
+                if(smokeStep==20) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
+            captureRecording(now());
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
-        case WM_DESTROY: KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
+        case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
+        case WM_DESTROY: recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
+        // An output failure ends this session; do not retry partial samples.
+        if(recorder) {try {stopRecording();}catch(...) {}}
         if(smoke) {std::ofstream("gui-smoke.txt")<<"FAIL: "<<e.what();PostQuitMessage(1);}
         else MessageBoxA(hwnd,e.what(),"Vision Track Studio",MB_OK|MB_ICONERROR);
         if(msg==WM_CREATE) return -1;
@@ -131,11 +177,12 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     smoke=std::wstring(cmd).find(L"--self-test-gui")!=std::wstring::npos;
     if(FAILED(CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED))) return 1;
+    if(FAILED(MFStartup(MF_VERSION))) {CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
-    if(!RegisterClass(&cls)) {CoUninitialize();return 1;}
+    if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
     HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,590,nullptr,nullptr,instance,nullptr);
-    if(!main) {CoUninitialize();return 1;}ShowWindow(main,show);
+    if(!main) {MFShutdown();CoUninitialize();return 1;}ShowWindow(main,show);
     MSG message{};int status;
     while((status=GetMessage(&message,nullptr,0,0))>0) {TranslateMessage(&message);DispatchMessage(&message);}
-    CoUninitialize();return status<0?1:static_cast<int>(message.wParam);
+    MFShutdown();CoUninitialize();return status<0?1:static_cast<int>(message.wParam);
 }

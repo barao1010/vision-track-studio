@@ -19,12 +19,15 @@ jobs:
         if: runner.os == 'Windows'
       - run: python validation/check_native_recording.py build/native-recording.mp4
         if: runner.os == 'Windows'
+      - run: python validation/check_gui_recording.py build/gui-recording.mp4
+        if: runner.os == 'Windows'
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows' && always()
         with:
           name: windows-native-recording-validation
           path: |
             build/native-recording.mp4
+            build/gui-recording.mp4
             build/Testing/Temporary/LastTest.log
   recorded-comparison:
     runs-on: ubuntu-latest

@@ -95,3 +95,13 @@ Tests compare the output against an analytic 440 Hz waveform, verify 44.1→48 k
 chunk invariance, stereo isolation, 48→16 kHz passband/alias rejection, identity,
 short/empty streams and malformed packets. These are signal-processing contracts,
 not evidence of live device synchronization or complete OBS equivalence.
+
+The engineering window now connects its MP4 start/stop button to the program
+output, including scene transitions and image/desktop sources. It explicitly
+labels recording as **without audio** until live capture is connected; the file
+contains a silent AAC track. A monotonic clock drives the 30 fps timeline,
+repeating the current frame when the UI falls behind and stopping on a stall
+over ten seconds. This synchronous path is not yet a production capture scheduler.
+The GUI smoke test starts and stops a recording through WM_COMMAND; CI decodes
+that file to check timestamps, red-to-blue fade, dimensions and the silent track.
+The approved final interface has not yet replaced this engineering window.
