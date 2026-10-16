@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include "FixedCameraSceneZoom.hpp"
+#include <utility/ScreenshotObj.hpp>
+#include <QBuffer>
+#include <QPointer>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -76,7 +80,12 @@ protected:
 class VisionTrackDock : public QDockWidget {
     QProcess worker;
     QLineEdit *video, *ptz, *profile, *user, *password, *host, *serialPort;
-    QComboBox *protocol, *motionPreset;
+    QComboBox *protocol, *motionPreset, *cameraMode, *obsSource;
+    FixedCameraSceneZoom sceneZoom;
+    QTimer sourceTimer;
+    QPointer<ScreenshotObj> sourceCapture;
+    bool useObsFrames = false;
+    bool trackingEnabled = false;
     QSpinBox *port, *baud, *address, *presetNumber;
     QTimer manualTimer;
     QJsonObject manualCommand;
@@ -92,6 +101,9 @@ class VisionTrackDock : public QDockWidget {
             worker.write(QJsonDocument(message).toJson(QJsonDocument::Compact) + '\n');
     }
     void shutdown() {
+        trackingEnabled = false;
+        sourceTimer.stop();
+        sceneZoom.restore();
         watchdog.stop();
         manualTimer.stop();
         send(QJsonObject{{"action", "quit"}});
@@ -101,7 +113,7 @@ class VisionTrackDock : public QDockWidget {
         }
     }
 public:
-    explicit VisionTrackDock(QMainWindow *main) : QDockWidget(QStringLiteral("Vision Track • Rastreio PTZ"), main) {
+    explicit VisionTrackDock(QMainWindow *main) : QDockWidget(QStringLiteral("Vision Track • Rastreio PTZ"), main), sceneZoom(static_cast<OBSBasic *>(main)) {
         setObjectName(QStringLiteral("visionTrackDock"));
         auto *body = new QWidget(this);
         auto *columns = new QHBoxLayout(body);
@@ -118,6 +130,55 @@ public:
         columns->addWidget(viewColumn, 4);
         columns->addWidget(controlColumn, 3);
         columns->addWidget(connectionColumn, 3);
+        cameraMode = new QComboBox(body);
+        cameraMode->addItem(QStringLiteral("PTZ físico"), QStringLiteral("ptz"));
+        cameraMode->addItem(QStringLiteral("Câmera fixa • zoom digital"), QStringLiteral("fixed"));
+        controlLayout->addRow(QStringLiteral("Modo"), cameraMode);
+        obsSource = new QComboBox(body);
+        auto *refreshSources = new QPushButton(QStringLiteral("Atualizar fontes"), body);
+        auto fillSources = [this]() {
+            const QString previous = obsSource->currentData().toString();
+            obsSource->clear();
+            obsSource->addItem(QStringLiteral("Vídeo externo RTSP / dispositivo"), QString());
+            obs_enum_sources([](void *ctx, obs_source_t *source) -> bool {
+                if (obs_source_get_type(source) == OBS_SOURCE_TYPE_INPUT &&
+                    (obs_source_get_output_flags(source) & OBS_SOURCE_VIDEO)) {
+                    const QString name = QString::fromUtf8(obs_source_get_name(source));
+                    static_cast<QComboBox *>(ctx)->addItem(name, name);
+                }
+                return true;
+            }, obsSource);
+            const int index = obsSource->findData(previous);
+            if (index >= 0) obsSource->setCurrentIndex(index);
+        };
+        layout->addRow(QStringLiteral("Fonte de vídeo do OBS"), obsSource);
+        layout->addRow(refreshSources);
+        QObject::connect(refreshSources, &QPushButton::clicked, this, fillSources);
+        QObject::connect(obsSource, &QComboBox::currentIndexChanged, this, [this]() { shutdown(); });
+        QObject::connect(cameraMode, &QComboBox::currentIndexChanged, this, [this]() { shutdown(); });
+        fillSources();
+        sourceTimer.setInterval(100);
+        QObject::connect(&sourceTimer, &QTimer::timeout, this, [this]() {
+            if (!useObsFrames || sourceCapture || worker.state() != QProcess::Running || worker.bytesToWrite() > 200000) return;
+            const QByteArray name = obsSource->currentData().toString().toUtf8();
+            OBSSourceAutoRelease source = obs_get_source_by_name(name.constData());
+            if (!source) { shutdown(); status->setText(QStringLiteral("Fonte removida. Rastreio parado.")); return; }
+            const auto w = obs_source_get_width(source);
+            const auto h = obs_source_get_height(source);
+            if (!w || !h) return;
+            ScreenshotObj::Options options;
+            options.outputToFile = false;
+            options.size = QSize(640, std::max(1, int(640.0 * h / w)));
+            sourceCapture = new ScreenshotObj(source, options);
+            QObject::connect(sourceCapture, &ScreenshotObj::imageReady, this, [this](const QImage &image) {
+                if (!sourceTimer.isActive() || image.isNull()) return;
+                QByteArray bytes;
+                QBuffer buffer(&bytes);
+                buffer.open(QIODevice::WriteOnly);
+                image.save(&buffer, "JPG", 75);
+                send(QJsonObject{{"action", "frame"}, {"frame", QString::fromLatin1(bytes.toBase64())}});
+            });
+        });
         protocol = new QComboBox(body);
         protocol->addItem(QStringLiteral("ONVIF"), QStringLiteral("onvif"));
         protocol->addItem(QStringLiteral("VISCA IP (UDP)"), QStringLiteral("visca_ip"));
@@ -140,7 +201,7 @@ public:
             baud->setValue(kind == "pelco_d" ? 2400 : 9600);
             invertTilt->setChecked(kind == "onvif");
         });
-        video = new QLineEdit(body); video->setPlaceholderText(QStringLiteral("rtsp://câmera/stream"));
+        video = new QLineEdit(body); video->setPlaceholderText(QStringLiteral("rtsp://câmera/stream ou device:0"));
         ptz = new QLineEdit(body); ptz->setPlaceholderText(QStringLiteral("http://câmera/onvif/ptz_service"));
         profile = new QLineEdit(body);
         user = new QLineEdit(body);
@@ -175,6 +236,7 @@ public:
             auto *button = new QPushButton(label, manualBody);
             manualLayout->addWidget(button, row, col);
             QObject::connect(button, &QPushButton::pressed, this, [this, pan, tilt, zoom]() {
+                trackingEnabled = false;
                 manualCommand = QJsonObject{{"action", "manual"}, {"pan", pan * speed->value()},
                                              {"tilt", tilt * speed->value()}, {"zoom", zoom * .15}};
                 send(manualCommand); manualTimer.start();
@@ -216,14 +278,17 @@ public:
         });
         QObject::connect(connectButton, &QPushButton::clicked, this, [this]() {
             if (worker.state() != QProcess::NotRunning) { shutdown(); return; }
+            const bool fixed = cameraMode->currentData().toString() == QStringLiteral("fixed");
+            useObsFrames = !obsSource->currentData().toString().isEmpty();
             const QString kind = protocol->currentData().toString();
             const bool invalidConnection = kind == "onvif" ? (ptz->text().isEmpty() || profile->text().isEmpty())
                 : kind == "visca_serial" ? serialPort->text().isEmpty()
                 : kind == "pelco_d" ? (host->text().isEmpty() && serialPort->text().isEmpty()) : host->text().isEmpty();
-            if (video->text().isEmpty() || invalidConnection) {
+            if ((!useObsFrames && video->text().isEmpty()) || (!fixed && invalidConnection) || (fixed && !useObsFrames)) {
                 status->setText(QStringLiteral("Preencha vídeo e os dados de ligação do protocolo selecionado.")); return;
             }
             pending.clear();
+            sceneZoom.setSource(fixed ? obsSource->currentData().toString() : QString());
             auto env = QProcessEnvironment::systemEnvironment();
             env.insert("VTS_PTZ_USER", user->text()); env.insert("VTS_PTZ_PASSWORD", password->text());
             worker.setProcessEnvironment(env);
@@ -232,13 +297,15 @@ public:
             worker.start();
         });
         QObject::connect(&worker, &QProcess::started, this, [this]() {
-            send(QJsonObject{{"video", video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
+            send(QJsonObject{{"cameraMode", cameraMode->currentData().toString()},
+                             {"video", useObsFrames ? QStringLiteral("__obs_source__") : video->text()}, {"ptz", ptz->text()}, {"profile", profile->text()},
                              {"invertPan", invertPan->isChecked()}, {"invertTilt", invertTilt->isChecked()},
                              {"speed", speed->value()}, {"protocol", protocol->currentData().toString()},
                              {"preset", motionPreset->currentData().toString()}, {"host", host->text()},
                              {"port", port->value()}, {"serial", serialPort->text()}, {"baud", baud->value()},
                              {"address", address->value()}});
             watchdog.start(15000);
+            if (useObsFrames) sourceTimer.start();
         });
         QObject::connect(&worker, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
             status->setText(QStringLiteral("Não foi possível iniciar o módulo de rastreio."));
@@ -250,6 +317,11 @@ public:
                 const auto row = pending.left(newline); pending.remove(0, newline+1);
                 const auto message = QJsonDocument::fromJson(row).object();
                 if (message.contains("status")) status->setText(message["status"].toString());
+                if (message["zoomReset"].toBool(false)) sceneZoom.restore();
+                if (trackingEnabled && message.contains("digitalCrop") && cameraMode->currentData().toString() == QStringLiteral("fixed")) {
+                    const auto crop = message["digitalCrop"].toObject();
+                    sceneZoom.apply(crop["left"].toDouble(), crop["top"].toDouble(), crop["width"].toDouble(), crop["height"].toDouble());
+                }
                 if (message.contains("frame")) {
                     preview->setFrame(QByteArray::fromBase64(message["frame"].toString().toLatin1()));
                     watchdog.start();
@@ -258,9 +330,9 @@ public:
             if (pending.size() > 4000000) shutdown();
         });
         QObject::connect(&worker, &QProcess::readyReadStandardError, this, [this]() { worker.readAllStandardError(); });
-        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { watchdog.stop(); manualTimer.stop(); });
-        QObject::connect(stop, &QPushButton::clicked, this, [this]() { manualTimer.stop(); send(QJsonObject{{"action", "stop"}}); });
-        preview->selected = [this](QJsonArray box) { send(QJsonObject{{"action", "select"}, {"box", box}}); };
+        QObject::connect(&worker, &QProcess::finished, this, [this](int, QProcess::ExitStatus) { sourceTimer.stop(); sceneZoom.restore(); watchdog.stop(); manualTimer.stop(); });
+        QObject::connect(stop, &QPushButton::clicked, this, [this]() { trackingEnabled = false; manualTimer.stop(); sceneZoom.restore(); send(QJsonObject{{"action", "stop"}}); });
+        preview->selected = [this](QJsonArray box) { trackingEnabled = true; send(QJsonObject{{"action", "select"}, {"box", box}}); };
         QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { shutdown(); });
     }
     ~VisionTrackDock() override { shutdown(); }

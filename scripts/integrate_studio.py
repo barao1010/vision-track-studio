@@ -3,6 +3,7 @@
 from pathlib import Path
 import shutil
 import sys
+import os
 
 root = Path(sys.argv[1]).resolve()
 project = Path(__file__).resolve().parent.parent
@@ -14,19 +15,28 @@ def replace(path, old, new):
         raise RuntimeError(f"Upstream anchor missing: {path}: {old}")
     file.write_text(text.replace(old, new), encoding="utf-8")
 
+shutil.copy2(project / "tracking/FixedCameraSceneZoom.hpp", root / "frontend/widgets/FixedCameraSceneZoom.hpp")
 shutil.copy2(project / "tracking/VisionTrackDock.hpp", root / "frontend/widgets/VisionTrackDock.hpp")
-replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"')
+shutil.copy2(project / "tracking/VisionBibleDock.hpp", root / "frontend/widgets/VisionBibleDock.hpp")
+shutil.copy2(project / "tracking/VisionUpdateDialog.hpp", root / "frontend/widgets/VisionUpdateDialog.hpp")
+build_number=int(os.environ.get("GITHUB_RUN_NUMBER", "0"))
+(root / "frontend/widgets/VisionUpdateBuild.hpp").write_text(f"#pragma once\n#define VTS_NATIVE_BUILD {build_number}\n", encoding="utf-8")
+replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"\n#include "VisionBibleDock.hpp"\n#include "VisionUpdateDialog.hpp"')
 replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',
         '\tauto *visionTrackDock = new VisionTrackDock(this);\n'
         '\taddDockWidget(Qt::RightDockWidgetArea, visionTrackDock);\n'
         '\tui->menuDocks->addAction(visionTrackDock->toggleViewAction());\n'
+        '\tauto *visionBibleDock = new VisionBibleDock(this);\n'
+        '\taddDockWidget(Qt::RightDockWidgetArea, visionBibleDock);\n'
+        '\ttabifyDockWidget(visionTrackDock, visionBibleDock);\n'
+        '\tui->menuDocks->addAction(visionBibleDock->toggleViewAction());\n'
         '\tstartingDockLayout = saveState();')
 replace("frontend/widgets/OBSBasic.cpp", 'name << "OBS ";', 'name << "Vision Track Studio ";')
-replace("frontend/widgets/OBSBasic.cpp", '\tTimedCheckForUpdates();', '\t// Vision Track Studio uses its own release channel.')
-replace("frontend/widgets/OBSBasic_Updater.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include <QDesktopServices>\n#include <QUrl>')
+replace("frontend/widgets/OBSBasic.cpp", '\tTimedCheckForUpdates();', '\tif (qEnvironmentVariableIsEmpty("VTS_DISABLE_UPDATE_CHECK")) QTimer::singleShot(8000, this, [this]() { VisionUpdateDialog::check(this, false); });')
+replace("frontend/widgets/OBSBasic_Updater.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionUpdateDialog.hpp"')
 replace("frontend/widgets/OBSBasic_Updater.cpp", 'void OBSBasic::CheckForUpdates(bool manualUpdate)\n{',
         'void OBSBasic::CheckForUpdates(bool manualUpdate)\n{\n'
-        '\tif (manualUpdate) QDesktopServices::openUrl(QUrl("https://github.com/barao1010/vision-track-studio/releases"));\n'
+        '\tVisionUpdateDialog::check(this, manualUpdate);\n'
         '\treturn; // Never replace this distribution with the official OBS binary.\n')
 replace("frontend/widgets/OBSBasic_MainControls.cpp", 'void OBSBasic::on_actionRepair_triggered()\n{',
         'void OBSBasic::on_actionRepair_triggered()\n{\n\tCheckForUpdates(true);\n\treturn;\n')

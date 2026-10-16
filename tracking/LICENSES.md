@@ -8,3 +8,7 @@ O worker combinado desta distribuição é disponibilizado sob GNU GPL versão 3
 - A base OBS mantém seus avisos originais GPL-2.0-or-later e o arquivo COPYING. Ela comunica com o worker por um processo separado.
 
 O pacote Source contém o código correspondente, scripts de compilação e atribuições. A distribuição não é afiliada ao OBS Project nem ao OpenCV Project.
+
+Vosk API 0.3.45 e vosk-model-small-pt-0.3: Apache-2.0.
+Veja models/LICENSE-VOSK.txt. A distribuição inclui o modelo de fala,
+e a Bíblia Portuguesa Mundial (BPM), declarada domínio público pelo editor. Veja LICENSE-BPM.txt no pacote e https://ebible.org/porbrbsl/copyright.htm. O snapshot é um rascunho datado de 13/10/2026.

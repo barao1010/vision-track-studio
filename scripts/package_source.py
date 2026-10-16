@@ -7,6 +7,8 @@ with zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED) as archive:
     for argument in sys.argv[2:]:
         root = Path(argument)
         for file in root.rglob("*"):
+            if file.name == "rpc-secret.json" or "recordings" in file.relative_to(root).parts:
+                continue
             if not file.is_file():
                 continue
             relative = file.relative_to(root)

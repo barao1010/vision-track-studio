@@ -54,6 +54,11 @@ def install(root):
             tracking->show();
             resizeDocks({tracking, ui->transitionsDock}, {650, 270}, Qt::Horizontal);
         }
+        if (auto *bible = findChild<QDockWidget *>(QStringLiteral("visionBibleDock"))) {
+            removeDockWidget(bible);
+            addDockWidget(Qt::BottomDockWidgetArea, bible);
+            if (tracking) { tabifyDockWidget(tracking, bible); tracking->raise(); }
+        }
         for (auto *panel : panels)
             panel->show();
         resizeDocks({ui->scenesDock, ui->sourcesDock}, {220, 220}, Qt::Horizontal);

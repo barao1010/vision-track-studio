@@ -20,6 +20,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m compileall -q tracking scripts
+      - run: c++ -std=c++17 -Ivalidation/native_stubs validation/native_zoom_state.cpp -o /tmp/vision-zoom-state-test
+      - run: /tmp/vision-zoom-state-test
       - working-directory: tracking
         run: python -m unittest discover -p 'test_*.py' -v
   windows-x64:
@@ -62,12 +64,19 @@ jobs:
           python scripts/prepare_tracking_model.py
           python -m PyInstaller --noconfirm --clean --onedir --console --name vision-track-worker --paths tracking --add-data "tracking/models;models" tracking/native_worker.py
           & "dist/vision-track-worker/vision-track-worker.exe" --self-test
+          python scripts/prepare_speech_model.py
+          python scripts/prepare_default_bible.py
+          python -m PyInstaller --noconfirm --clean --onedir --console --name vision-bible-worker --paths tracking --collect-all vosk --add-data "tracking/models/speech-model;speech-model" --add-data "tracking/data;data" tracking/bible_worker.py
+          & "dist/vision-bible-worker/vision-bible-worker.exe" --self-test
       - name: Bundle complete runtime, licenses and source
         shell: pwsh
         run: |
           $runtime = 'obs-studio/build_x64/rundir/RelWithDebInfo'
           if (-not (Test-Path "$runtime/bin/64bit/vision-track-studio.exe")) { throw 'Studio executable missing' }
           Copy-Item vision-track-studio/dist/vision-track-worker "$runtime/bin/64bit/vision-track-worker" -Recurse
+          Copy-Item vision-track-studio/dist/vision-bible-worker "$runtime/bin/64bit/vision-bible-worker" -Recurse
+          Copy-Item vision-track-studio/tracking/models/LICENSE-VOSK.txt "$runtime/LICENSE-VOSK.txt"
+          Copy-Item vision-track-studio/tracking/data/LICENSE-BPM.txt "$runtime/LICENSE-BPM.txt"
           Copy-Item obs-studio/COPYING "$runtime/COPYING"
           New-Item -ItemType Directory -Force "$runtime/manuals" | Out-Null
           Copy-Item Vision-Track-Studio-Manual-PT.pdf "$runtime/manuals/Vision-Track-Studio-Manual-PT.pdf"
@@ -81,12 +90,70 @@ jobs:
         run: |
           & 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe' vision-track-studio/scripts/windows-installer.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Validate installed application with actual audiovisual recording
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path 'Vision-Track-Studio-Setup-preview.exe'
+          $installed = Join-Path $env:RUNNER_TEMP 'vision-installed-validation'
+          $setup = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$installed" -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
+          $exe = Join-Path $installed 'bin/64bit/vision-track-studio.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed application missing' }
+          if (-not (Test-Path "$installed/bin/64bit/vision-bible-worker/_internal/data/BPM.json")) { throw 'Installed Bible data missing' }
+          python -m pip install av==16.0.1 numpy==2.2.6 websocket-client==1.8.0
+          python vision-track-studio/validation/prepare.py $installed vision
+          if ($LASTEXITCODE -ne 0) { throw 'Installed test profile preparation failed' }
+          $env:VTS_DISABLE_UPDATE_CHECK = '1'
+          $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList '--portable', '--disable-updater', '--disable-shutdown-check', '--profile', 'Parity', '--collection', 'Parity' -PassThru
+          try {
+            python vision-track-studio/validation/exercise.py
+            if ($LASTEXITCODE -ne 0) { throw 'Installed audiovisual validation failed' }
+          } finally {
+            if (-not $process.HasExited) {
+              $null = $process.CloseMainWindow()
+              if (-not $process.WaitForExit(10000)) { $process.Kill() }
+            }
+          }
       - name: Smoke test Windows startup
         shell: pwsh
         run: |
           $exe = Resolve-Path 'obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/vision-track-studio.exe'
           $process = Start-Process -FilePath $exe -ArgumentList '--version' -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw "Startup failed: $($process.ExitCode)" }
+      - name: Check actual Windows application window
+        shell: pwsh
+        run: |
+          python vision-track-studio/validation/prepare.py obs-studio/build_x64/rundir/RelWithDebInfo vision
+          if ($LASTEXITCODE -ne 0) { throw 'GUI test profile preparation failed' }
+          $exe = Resolve-Path 'obs-studio/build_x64/rundir/RelWithDebInfo/bin/64bit/vision-track-studio.exe'
+          $process = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -ArgumentList '--portable', '--disable-updater', '--disable-shutdown-check' -PassThru
+          try {
+            $windowReady = $false
+            for ($attempt = 0; $attempt -lt 45; $attempt++) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) { throw "Application exited during GUI startup: $($process.ExitCode)" }
+              if ($process.MainWindowHandle -ne 0 -and $process.Responding) { $windowReady = $true; break }
+            }
+            if (-not $windowReady) { throw 'No responsive application window appeared' }
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+            if ($process.HasExited -or -not $process.Responding) { throw 'Application failed after window initialization' }
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName System.Windows.Forms
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+              $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+              $bitmap.Save((Join-Path (Get-Location) 'Vision-Track-Studio-UI.png'))
+            } finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally {
+            if (-not $process.HasExited) {
+              $null = $process.CloseMainWindow()
+              if (-not $process.WaitForExit(10000)) { $process.Kill() }
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: Vision-Track-Studio-Windows-preview
@@ -95,8 +162,12 @@ jobs:
             Vision-Track-Studio-Setup-preview.exe
             Vision-Track-Studio-Source.zip
             Vision-Track-Studio-Manual-PT.pdf
+            Vision-Track-Studio-UI.png
+            vision-track-studio/validation/results/**/measurements.json
+            vision-track-studio/validation/results/**/recordings/*.mkv
           if-no-files-found: error
       - name: Publish explicitly experimental release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
