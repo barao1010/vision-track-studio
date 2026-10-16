@@ -55,7 +55,23 @@ câmera USB/placa de captura. Escolha uma fonte em “Fonte de vídeo do OBS”.
 No modo fixo, o recorte digital acompanha o alvo na pré-visualização e no
 programa e restaura o enquadramento ao parar.
 
-Bíblia por voz e atualização automática continuam pendentes nesta linha nativa.
+Bíblia por voz: painel, captura da fonte OBS e worker offline integrados em código; validação de voz real pendente. Atualização automática continua pendente nesta linha nativa.
 Câmeras, áudio, transmissão e associação visual exigem validação real.
 A recuperação não é uma entrega completa. O pipeline exige agora uma janela
 Windows responsiva além de `--version`; isso não comprova produção audiovisual.
+
+### Bíblia por voz — integração em validação
+
+O painel recebe o áudio de uma fonte já capturada pelo OBS e envia PCM mono
+16 kHz ao reconhecimento offline Vosk. Silêncio não encerra a escuta.
+Referências explícitas e citações com correspondência suficiente podem atualizar
+uma fonte de texto; resultados ambíguos exigem seleção do operador. O botão
+“Adicionar texto à cena de programa” cria a fonte e as opções nativas permitem
+ajustar posição e estilo. A tradução JSON deve conter `translation`, `license` e
+`verses` com `book`, `chapter`, `verse`, `text`. Metadados de licença importados
+não constituem verificação de direitos. Nenhuma tradução bíblica está incluída.
+
+O modelo português é `vosk-model-small-pt-0.3`, Apache-2.0 segundo o catálogo
+oficial https://alphacephei.com/vosk/models. O download é verificado por SHA-256
+e a licença acompanha a distribuição. O teste do worker verifica carregamento
+e silêncio; não prova reconhecimento de sermões nem precisão de citações.

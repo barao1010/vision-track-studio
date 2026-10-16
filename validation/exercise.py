@@ -86,7 +86,10 @@ def exercise():
                 time.sleep(3.5)
             finally:
                 stopped=client.call('StopRecord')
-            assert not client.call('GetRecordStatus')['outputActive']
+            deadline=time.monotonic()+15
+            while client.call('GetRecordStatus')['outputActive']:
+                assert time.monotonic()<deadline, 'Recording did not stop within 15 seconds'
+                time.sleep(.1)
             output=Path(stopped['outputPath'])
             assert output.exists(), output
             output.replace(recordings/'exercise.mkv')

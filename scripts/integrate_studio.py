@@ -16,11 +16,16 @@ def replace(path, old, new):
 
 shutil.copy2(project / "tracking/FixedCameraSceneZoom.hpp", root / "frontend/widgets/FixedCameraSceneZoom.hpp")
 shutil.copy2(project / "tracking/VisionTrackDock.hpp", root / "frontend/widgets/VisionTrackDock.hpp")
-replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"')
+shutil.copy2(project / "tracking/VisionBibleDock.hpp", root / "frontend/widgets/VisionBibleDock.hpp")
+replace("frontend/widgets/OBSBasic.cpp", '#include "OBSBasic.hpp"', '#include "OBSBasic.hpp"\n#include "VisionTrackDock.hpp"\n#include "VisionBibleDock.hpp"')
 replace("frontend/widgets/OBSBasic.cpp", '\tstartingDockLayout = saveState();',
         '\tauto *visionTrackDock = new VisionTrackDock(this);\n'
         '\taddDockWidget(Qt::RightDockWidgetArea, visionTrackDock);\n'
         '\tui->menuDocks->addAction(visionTrackDock->toggleViewAction());\n'
+        '\tauto *visionBibleDock = new VisionBibleDock(this);\n'
+        '\taddDockWidget(Qt::RightDockWidgetArea, visionBibleDock);\n'
+        '\ttabifyDockWidget(visionTrackDock, visionBibleDock);\n'
+        '\tui->menuDocks->addAction(visionBibleDock->toggleViewAction());\n'
         '\tstartingDockLayout = saveState();')
 replace("frontend/widgets/OBSBasic.cpp", 'name << "OBS ";', 'name << "Vision Track Studio ";')
 replace("frontend/widgets/OBSBasic.cpp", '\tTimedCheckForUpdates();', '\t// Vision Track Studio uses its own release channel.')
