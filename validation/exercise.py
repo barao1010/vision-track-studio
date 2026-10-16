@@ -53,8 +53,12 @@ def exercise():
     client=OBSClient(config['password'])
     try:
         assert client.call('GetVersion')['obsWebSocketVersion']
-        names={s['sceneName'] for s in client.call('GetSceneList')['scenes']}
-        assert {'Parity 1','Parity 2','Parity 3'} <= names
+        deadline=time.monotonic()+30
+        while True:
+            names={s['sceneName'] for s in client.call('GetSceneList')['scenes']}
+            if {'Parity 1','Parity 2','Parity 3'} <= names: break
+            assert time.monotonic()<deadline, ('Scene collection did not finish loading',names)
+            time.sleep(1)
         inputs={s['inputName'] for s in client.call('GetInputList')['inputs']}
         expected={'Parity Color','Parity Image','Parity Browser','Parity Audio'}
         assert expected <= inputs, inputs
