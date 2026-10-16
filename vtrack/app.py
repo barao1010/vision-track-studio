@@ -48,7 +48,7 @@ class App:
         self.refresh_lists()
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.bind('<FocusOut>', self.focus_out)
-        self.tick()
+        self.root.after_idle(lambda: self.root.after(30, self.tick))
         self.root.after(4000, lambda: self.check_updates(silent=True))
 
     @property
@@ -487,7 +487,10 @@ class App:
     def restore_layout(self):
         if self.closed:
             return
-        width = max(1080, self.body_panes.winfo_width())
+        if self.body_panes.winfo_width() < 600 or self.workspace.winfo_height() < 300:
+            self.root.after(50, self.restore_layout)
+            return
+        width = self.body_panes.winfo_width()
         sashes = self.project.settings.get('panel_sashes', [235, width - 250])
         try:
             if len(sashes) == 2:
@@ -782,7 +785,7 @@ class App:
         self.update_tracking(start)
         for name in failures:
             self.guard(lambda key=name: self.stop_output(key))
-        self.root.after(max(1, round((1 / self.project.fps - (time.monotonic() - start)) * 1000)), self.tick)
+        self.root.after(max(5, round((1 / self.project.fps - (time.monotonic() - start)) * 1000)), self.tick)
 
     def close(self):
         if self.closed:

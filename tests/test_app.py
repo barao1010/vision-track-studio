@@ -24,6 +24,8 @@ class DesktopTests(unittest.TestCase):
                 return
             try:
                 self.assertTrue(app.camera_view.winfo_ismapped())
+                if app.program_view.winfo_width() <= 100:
+                    print('layout diagnostics:', {'root': root.geometry(), 'mapped': root.winfo_ismapped(), 'workspace': (app.workspace.winfo_width(), app.workspace.winfo_height()), 'body': (app.body_panes.winfo_width(), app.body_panes.winfo_height()), 'sashes': (app.body_panes.sashpos(0), app.body_panes.sashpos(1)), 'program': (app.program_view.winfo_width(), app.program_view.winfo_height())}, flush=True)
                 self.assertGreater(app.program_view.winfo_width(), 100)
                 app.project.settings['panel_sashes'] = [260, 1100]
                 app.restore_layout()
