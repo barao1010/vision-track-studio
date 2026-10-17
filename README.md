@@ -102,7 +102,9 @@ output, including scene transitions and image/desktop sources. It explicitly
 offers an optional default-microphone checkbox, gain slider, output peak meter and mute control. Without
 that checkbox, the file contains a silent AAC track. A monotonic clock drives the 30 fps timeline,
 repeating the current frame when the UI falls behind and stopping on a stall
-over ten seconds. This synchronous path is not yet a production capture scheduler.
+over ten seconds. Audio waits, mixing and encoding now run on a bounded worker; startup and
+stop/finalization still wait, and capture/composition remain on the UI thread.
+This is not yet a complete production capture scheduler.
 The GUI smoke test starts and stops a recording through WM_COMMAND; CI decodes
 that file to check timestamps, red-to-blue fade, dimensions and the silent track.
 The approved final interface has not yet replaced this engineering window.

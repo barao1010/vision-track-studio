@@ -88,3 +88,10 @@ Local warning-clean and ASan+UBSan checks passed (detect_leaks=0). Windows decod
 regressions must pass before this increment is considered validated.
 The user's 16/10 clarification rejects a partial testing delivery: do not package
 or deliver the engineering shell in place of the requested complete application.
+
+Validation completed for `a2f6f16` in run 39072542555: Windows, Linux and
+recorded comparison all passed. Windows also decoded the native and GUI MP4
+fixtures with unchanged video, timestamp, +6 dB tone and mute criteria.
+The output worker tests also passed locally with ASan+UBSan (leaks disabled).
+This establishes the output-worker increment, not physical-device validation,
+full interface responsiveness under load, or complete OBS parity.
