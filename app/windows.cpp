@@ -9,8 +9,7 @@
 #include <wrl/client.h>
 #include "core.hpp"
 #include "windows_desktop.hpp"
-#include "windows_recording.hpp"
-#include "windows_microphone.hpp"
+#include "windows_output.hpp"
 #include "audio_buffer.hpp"
 #include <numbers>
 #include <algorithm>
@@ -28,36 +27,24 @@ std::vector<std::vector<std::string>> ids;
 std::unique_ptr<Switcher> program;
 int selected=0,serial=0;
 bool smoke=false, smokeAudio=false;
-std::unique_ptr<WindowsMicrophone> microphone;
 int smokeStep=0;
-std::unique_ptr<WindowsRecorder> recorder;
+std::unique_ptr<OutputWorker> recorder;
 std::int64_t recordStart=0, recordFrames=0;
-void recordFrame(const Frame& frame) {
-    AudioBlock silence{recordFrames*1600,2,std::vector<float>(3200,0)};
-    if(microphone) {
-        silence=microphone->read(audio_sample_time(recordStart)+recordFrames*1600,1600);
-        silence.start_sample=recordFrames*1600;
-    } else if(smokeAudio) {
-        for(int i=0;i<1600;++i) {
-            float value=static_cast<float>(.2*std::sin(2*std::numbers::pi*440*(silence.start_sample+i)/48000));
-            silence.samples[2*i]=value;silence.samples[2*i+1]=value;
-        }
-    }
+void recordFrame(std::shared_ptr<const Frame> frame) {
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
-    const float gain=std::pow(10.f,db/20.f);
-    auto output=mix(silence.start_sample,1600,2,{{&silence,gain,muted}});
+    recorder->enqueue({std::move(frame),recordFrames,audio_sample_time(recordStart)+recordFrames*1600,std::pow(10.f,db/20.f),muted});
+    ++recordFrames;
+    const auto meter=recorder->meter();
     std::wstring level=L"Nivel: ";
-    if(output.meter.peak>0) level+=std::to_wstring(static_cast<int>(std::lround(20*std::log10(output.meter.peak))))+L" dBFS";
+    if(meter.peak>0) level+=std::to_wstring(static_cast<int>(std::lround(20*std::log10(meter.peak))))+L" dBFS";
     else level+=L"silencio";
     SetWindowText(GetDlgItem(window,MeterLabel),level.c_str());
-    recorder->append(frame,output.block);++recordFrames;
 }
 void startRecording(const std::filesystem::path& path);
 void stopRecording() {
     if(!recorder) return;
     auto finishing=std::move(recorder);
-    microphone.reset();
     EnableWindow(GetDlgItem(window,UseMic),TRUE);
     SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
     finishing->finish();
@@ -66,22 +53,20 @@ void stopRecording() {
 std::int64_t now() {return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
 void startRecording(const std::filesystem::path& path) {
     if(recorder) throw std::logic_error("Recording already active");
-    std::unique_ptr<WindowsMicrophone> capture;
-    if(SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED)
-        capture=std::make_unique<WindowsMicrophone>();
-    auto starting=std::make_unique<WindowsRecorder>(path,640,360,30);
-    microphone=std::move(capture);
+    const bool useMicrophone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
+    const bool testAudio=smokeAudio;
+    auto starting=std::make_unique<OutputWorker>([path,useMicrophone,testAudio]{return create_windows_output(path,useMicrophone,testAudio);});
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
     recordStart=now();recordFrames=0;recorder=std::move(starting);
-    recordFrame(program->render(recordStart));
-    SetWindowText(GetDlgItem(window,Record),microphone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
+    recordFrame(std::make_shared<Frame>(program->render(recordStart)));
+    SetWindowText(GetDlgItem(window,Record),useMicrophone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
 void captureRecording(std::int64_t timestamp) {
     if(!recorder) return;
     const auto due=(timestamp-recordStart)*30/1000000000+1;
     if(due-recordFrames>300) throw std::runtime_error("Recording stopped: capture stalled for over ten seconds");
     if(due>recordFrames) {
-        auto frame=program->render(timestamp);
+        auto frame=std::make_shared<Frame>(program->render(timestamp));
         while(recordFrames<due) recordFrame(frame);
     }
 }
@@ -200,7 +185,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
         case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
-        case WM_DESTROY: microphone.reset();recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
+        case WM_DESTROY: recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
         // An output failure ends this session; do not retry partial samples.

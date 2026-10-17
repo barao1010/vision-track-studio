@@ -71,3 +71,20 @@ prove hardware operation. The follow-up gain test checks +6 dB in decoded AAC.
 Commit `7d52ba8` passed all jobs in run 38937789984, including decoded +6 dB
 signal amplitude and mute in the GUI recording. Keep the fixed thresholds in
 `validation/check_gui_recording.py`; this is not a physical-device test.
+
+
+## Output worker increment — 2026-10-17
+
+Audio waits, mixing and MP4 encoding now run in a bounded eight-packet worker
+queue. Frames are immutable shared snapshots; gain and mute are captured with
+each frame. Factory creation, COM/MF lifetime, writes, finalization and resource
+destruction stay on the worker. Queue saturation fails explicitly instead of
+blocking the producer or growing memory indefinitely. Starting still waits for
+initialization and stopping drains/finalizes synchronously; those two operations
+can still briefly block the window. Composition/capture remain on the UI thread.
+Deterministic tests block the sink while submitting and exercise queue limits,
+FIFO drain, thread affinity, initialization/write failure and repeated finish.
+Local warning-clean and ASan+UBSan checks passed (detect_leaks=0). Windows decode
+regressions must pass before this increment is considered validated.
+The user's 16/10 clarification rejects a partial testing delivery: do not package
+or deliver the engineering shell in place of the requested complete application.
