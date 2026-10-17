@@ -8,6 +8,8 @@
 #include <mfapi.h>
 #include <wrl/client.h>
 #include "core.hpp"
+#include "project.hpp"
+#include <map>
 #include "windows_desktop.hpp"
 #include "windows_output.hpp"
 #include "audio_buffer.hpp"
@@ -20,12 +22,30 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
 std::unique_ptr<Switcher> program;
-int selected=0,serial=0;
+int selected=0,serial=0,programScene=0;
+std::vector<std::string> sceneNames;
+std::map<std::shared_ptr<const VideoSource>,SourceDefinition> definitions;
+std::string utf8(const std::filesystem::path& path) {
+    auto s=path.u8string();return {reinterpret_cast<const char*>(s.data()),s.size()};
+}
+std::wstring wide(const std::string& text) {
+    int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),nullptr,0);
+    if(n<=0) throw std::runtime_error("Invalid UTF-8 project name");
+    std::wstring out(n,L' ');MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),out.data(),n);return out;
+}
+std::string nextId(const std::string& prefix) {
+    for(;;) {
+        auto id=prefix+std::to_string(++serial);bool used=false;
+        for(const auto& list:ids) if(std::find(list.begin(),list.end(),id)!=list.end()) used=true;
+        for(const auto& entry:definitions) if(entry.second.id==id) used=true;
+        if(!used) return id;
+    }
+}
 bool smoke=false, smokeAudio=false;
 int smokeStep=0;
 std::unique_ptr<OutputWorker> recorder;
@@ -89,24 +109,97 @@ Frame imageFile(const wchar_t* name) {
 }
 void refresh() {
     SendMessage(sourcesBox,LB_RESETCONTENT,0,0);
-    for(const auto& id:ids.at(selected)) {std::wstring label(id.begin(),id.end());if(!scenes[selected]->item(id).visible) label+=L" (oculta)";SendMessage(sourcesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
+    for(const auto& id:ids.at(selected)) {auto label=wide(id);if(!scenes[selected]->item(id).visible) label+=L" (oculta)";SendMessage(sourcesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
     if(!ids[selected].empty()) SendMessage(sourcesBox,LB_SETCURSEL,ids[selected].size()-1,0);
     InvalidateRect(window,nullptr,FALSE);
 }
-void addSource(Frame image) {
-    auto id="Imagem "+std::to_string(++serial);
+void addSource(Frame image,SourceDefinition definition) {
+    auto id=nextId("Imagem ");
+    definition.id=id;
     double scale=std::min(640.0/image.width(),360.0/image.height());
     int w=std::max(1,static_cast<int>(image.width()*scale)),h=std::max(1,static_cast<int>(image.height()*scale));
-    scenes[selected]->add({id,std::make_shared<StillSource>(std::move(image)),(640-w)/2,(360-h)/2,w,h,{}});
+    auto source=std::make_shared<StillSource>(std::move(image));
+    definitions.emplace(source,std::move(definition));
+    scenes[selected]->add({id,source,(640-w)/2,(360-h)/2,w,h,{}});
     ids[selected].push_back(id);refresh();
 }
 void addScene() {
     scenes.push_back(std::make_shared<Scene>());ids.emplace_back();selected=static_cast<int>(scenes.size())-1;
-    auto name=L"Cena "+std::to_wstring(scenes.size());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
+    sceneNames.push_back("Cena "+std::to_string(scenes.size()));
+    auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
+}
+Project snapshotProject() {
+    Project p;p.selected_scene=selected;p.program_scene=programScene;
+    p.gain_db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
+    p.microphone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
+    p.muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
+    std::map<std::string,bool> used;
+    for(std::size_t n=0;n<scenes.size();++n) {
+        SavedScene saved;saved.name=sceneNames.at(n);
+        for(const auto& id:ids[n]) {
+            const auto& item=scenes[n]->item(id);const auto& definition=definitions.at(item.source);
+            if(!used[definition.id]) {p.sources.push_back(definition);used[definition.id]=true;}
+            saved.items.push_back({id,definition.id,item.x,item.y,item.width,item.height,item.crop,item.opacity,item.visible});
+        }
+        p.scenes.push_back(std::move(saved));
+    }
+    return p;
+}
+void openProject(const std::filesystem::path& path) {
+    if(recorder) throw std::runtime_error("Stop recording before opening a project");
+    auto p=load_project(path);
+    std::map<std::string,std::shared_ptr<const VideoSource>> sources;
+    decltype(definitions) candidateDefinitions;
+    for(auto definition:p.sources) {
+        std::shared_ptr<const VideoSource> source;
+        if(definition.kind==SourceKind::desktop) source=std::make_shared<DesktopSource>();
+        else if(definition.kind==SourceKind::image) {
+            auto file=std::filesystem::u8path(definition.path);
+            if(file.is_relative()) file=std::filesystem::absolute(path).parent_path()/file;
+            definition.path=utf8(file);source=std::make_shared<StillSource>(imageFile(file.c_str()));
+        } else source=std::make_shared<StillSource>(Frame(1,1,definition.color));
+        sources.emplace(definition.id,source);candidateDefinitions.emplace(source,std::move(definition));
+    }
+    decltype(scenes) candidateScenes;decltype(ids) candidateIds;
+    std::vector<std::string> names;std::vector<std::wstring> labels;
+    for(const auto& saved:p.scenes) {
+        auto scene=std::make_shared<Scene>();std::vector<std::string> keys;
+        for(const auto& item:saved.items) {
+            auto source=sources.at(item.source);auto frame=source->frame(0);
+            if(item.crop.left+item.crop.right>=frame.width() || item.crop.top+item.crop.bottom>=frame.height())
+                throw std::runtime_error("Project crop exceeds source dimensions");
+            wide(item.id);
+            scene->add({item.id,source,item.x,item.y,item.width,item.height,item.crop,item.opacity,item.visible});keys.push_back(item.id);
+        }
+        labels.push_back(wide(saved.name));names.push_back(saved.name);
+        candidateScenes.push_back(std::move(scene));candidateIds.push_back(std::move(keys));
+    }
+    auto candidateProgram=std::make_unique<Switcher>(640,360,candidateScenes.at(p.program_scene));
+    // All decoding and source validation precede replacement of the active project.
+    scenes=std::move(candidateScenes);ids=std::move(candidateIds);definitions=std::move(candidateDefinitions);
+    sceneNames=std::move(names);program=std::move(candidateProgram);selected=p.selected_scene;programScene=p.program_scene;
+    SendMessage(scenesBox,LB_RESETCONTENT,0,0);
+    for(const auto& label:labels) SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));
+    SendMessage(scenesBox,LB_SETCURSEL,selected,0);
+    SendMessage(GetDlgItem(window,Gain),TBM_SETPOS,TRUE,p.gain_db);
+    SendMessage(GetDlgItem(window,UseMic),BM_SETCHECK,p.microphone?BST_CHECKED:BST_UNCHECKED,0);
+    SendMessage(GetDlgItem(window,Mute),BM_SETCHECK,p.muted?BST_CHECKED:BST_UNCHECKED,0);refresh();
 }
 Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(index==LB_ERR) return nullptr;return &scenes[selected]->item(ids[selected].at(static_cast<std::size_t>(index)));}
 void command(int id) {
     if(id==UseMic || id==Mute) return;
+    if(id==SaveProject || id==OpenProject) {
+        if(smoke) {
+            auto path=smokeAudio?L"gui-audio-project.vts":L"gui-project.vts";
+            if(id==SaveProject) save_project(path,snapshotProject());else openProject(path);
+            return;
+        }
+        wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;
+        ofn.lpstrFilter=L"Projeto Vision\0*.vts\0";ofn.lpstrDefExt=L"vts";ofn.Flags=OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
+        if(id==SaveProject) {ofn.Flags|=OFN_OVERWRITEPROMPT;if(GetSaveFileName(&ofn)) save_project(path,snapshotProject());}
+        else {ofn.Flags|=OFN_FILEMUSTEXIST;if(GetOpenFileName(&ofn)) openProject(path);}
+        return;
+    }
     if(id==Record) {
         if(recorder) {stopRecording();return;}
         if(smoke) {startRecording(smokeAudio?L"gui-audio.mp4":L"gui-recording.mp4");return;}
@@ -118,14 +211,15 @@ void command(int id) {
     }
     else if(id==AddScene) addScene();
     else if(id==AddDesktop) {
-        auto key="Tela "+std::to_string(++serial);
-        scenes[selected]->add({key,std::make_shared<DesktopSource>(),0,0,640,360,{}});
+        auto key=nextId("Tela ");
+        auto source=std::make_shared<DesktopSource>();definitions.emplace(source,SourceDefinition{key,SourceKind::desktop,"",{0,0,0,1}});
+        scenes[selected]->add({key,source,0,0,640,360,{}});
         ids[selected].push_back(key);refresh();
     }
     else if(id==AddImage) {
         wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;ofn.lpstrFilter=L"Imagens\0*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff\0Todos\0*.*\0";ofn.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
-        if(GetOpenFileName(&ofn)) addSource(imageFile(path));
-    } else if(id==Cut || id==Fade) program->take(scenes[selected],now(),id==Cut?0:300000000);
+        if(GetOpenFileName(&ofn)) addSource(imageFile(path),{"",SourceKind::image,utf8(std::filesystem::absolute(path)),{0,0,0,1}});
+    } else if(id==Cut || id==Fade) {program->take(scenes[selected],now(),id==Cut?0:300000000);programScene=selected;}
     else if(auto* item=selectedItem()) {
         if(id==Toggle) item->visible=!item->visible;
         if(id==Smaller || id==Larger) {double factor=id==Smaller?.9:1.1;item->width=std::clamp(static_cast<int>(item->width*factor),1,8192);item->height=std::clamp(static_cast<int>(item->height*factor),1,8192);item->x=(640-item->width)/2;item->y=(360-item->height)/2;}
@@ -170,15 +264,20 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             SendMessage(gainSlider,TBM_SETRANGE,TRUE,MAKELPARAM(-60,12));
             SendMessage(gainSlider,TBM_SETPOS,TRUE,smokeAudio?6:0);
             control(L"STATIC",L"Nivel: aguardando gravacao",MeterLabel,540,435,300,30);
+            control(L"BUTTON",L"Salvar projeto",SaveProject,220,490,180,30);
+            control(L"BUTTON",L"Abrir projeto",OpenProject,420,490,180,30);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
         case WM_TIMER:
             if(smoke) {
-                if(smokeStep==0) {addSource(Frame(2,2,{1,0,0,1}));SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(2,2,{0,0,1,1}));SendMessage(hwnd,WM_COMMAND,Fade,0);}
+                if(smokeStep==0) {addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(1,1,{0,0,1,1}),{"",SourceKind::solid,"",{0,0,1,1}});SendMessage(hwnd,WM_COMMAND,Fade,0);}
                 if(smokeAudio && smokeStep==40) SendMessage(GetDlgItem(hwnd,Mute),BM_SETCHECK,BST_CHECKED,0);
-                if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop\n";DestroyWindow(hwnd);return 0;}
+                if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,SaveProject,0);auto savedState=encode_project(snapshotProject());SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());SendMessage(hwnd,WM_COMMAND,OpenProject,0);verify(encode_project(snapshotProject())==savedState);verify(program->render(now()).at(320,180).b==1);
+                    auto before=encode_project(snapshotProject());std::ofstream("invalid-project.vts")<<"VISION_PROJECT 99";
+                    bool rejected=false;try {openProject(L"invalid-project.vts");}catch(const std::exception&) {rejected=true;}
+                    verify(rejected && encode_project(snapshotProject())==before);std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
             captureRecording(now());

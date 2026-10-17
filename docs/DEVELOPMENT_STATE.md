@@ -95,3 +95,23 @@ fixtures with unchanged video, timestamp, +6 dB tone and mute criteria.
 The output worker tests also passed locally with ASan+UBSan (leaks disabled).
 This establishes the output-worker increment, not physical-device validation,
 full interface responsiveness under load, or complete OBS parity.
+
+## Project persistence increment — 2026-10-17
+
+Added an original versioned .vts project format for source identity, ordered scenes
+and layers, image paths, desktop/solid sources, crop/position/opacity/visibility,
+preview/program selection and microphone/gain/mute settings. Save validates first
+and replaces via a same-filesystem temporary file; malformed/oversized versions,
+duplicate IDs and dangling sources are rejected. This is not a power-loss
+durability guarantee. Image paths are resolved against the project directory.
+The engineering window now has save/open actions. Open prepares and validates
+all sources/scenes before replacing the active project; missing images or invalid
+crops leave the current state intact. Loading while recording is rejected.
+An in-progress fade is saved as its target scene, not as a transition snapshot.
+
+Local project contracts passed warning-clean and ASan+UBSan (detect_leaks=0).
+GUI contracts now exercise save, remove, reopen, compare restored settings and
+blue program pixels, and preserve state on invalid-file failure. Windows CI
+validation is pending for this increment. The window remains an engineering
+harness, and no partial delivery is authorized. Device capture, browser, final
+interface, streaming and the other missing features still require implementation.
