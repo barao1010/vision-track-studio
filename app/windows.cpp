@@ -338,13 +338,13 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     SetWindowText(GetDlgItem(hwnd,TransformFirst+2),L"320");
                     SetWindowText(GetDlgItem(hwnd,TransformFirst+8),L"50");
                     SendMessage(hwnd,WM_COMMAND,ApplyTransform,0);
-                    auto transformed=program->render(now());verify(transformed.at(10,180).a==0 && transformed.at(500,180).a==.5f);
+                    auto transformed=program->render(now());verify(transformed.at(10,180).a==0 && transformed.at(400,180).a==.5f);
                     addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});
-                    verify(program->render(now()).at(500,180).r==1);
+                    verify(program->render(now()).at(400,180).r==1);
                     SendMessage(hwnd,WM_COMMAND,LayerDown,0);
-                    auto layered=program->render(now());verify(layered.at(500,180).r==.5f && layered.at(500,180).b==.5f);
+                    auto layered=program->render(now());verify(layered.at(400,180).r==.5f && layered.at(400,180).b==.5f);
                     SendMessage(hwnd,WM_COMMAND,SaveProject,0);SendMessage(hwnd,WM_COMMAND,OpenProject,0);
-                    verify(program->render(now()).at(500,180).b==.5f);
+                    verify(program->render(now()).at(400,180).b==.5f);
                     std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }

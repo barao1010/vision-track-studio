@@ -134,3 +134,16 @@ layer, check pixels, reorder against a red background, and save/reopen that orde
 Windows CI remains pending for this increment. No final interface or installer
 has been delivered. Next work remains camera/device lifecycle, browser sources,
 scheduler, streaming and approved interface, followed by extras and packaging.
+
+Historical run 39072728460 (docs-only commit a1eae10) failed its desktop pixel
+fixture while other contracts passed. The fixture flushed GDI without waiting
+for desktop presentation. Added an explicit DwmFlush presentation fence (no
+pixel-threshold reduction or retry-until-pass), and alternate red/green across
+all five captures to detect stale frames. This addresses the observed setup race
+hypothesis; Windows CI must validate the change.
+
+Run 39090876240 passed Linux/comparison but GUI checks failed: the new overlap
+check sampled x=500, outside the aspect-fitted 360px square background's [140,500)
+bounds. Corrected the fixture sample to x=400, inside both layers. The expected
+opaque red and 50/50 red-blue values are unchanged. This is a test-coordinate
+correction; it does not establish a passing Windows run yet.
