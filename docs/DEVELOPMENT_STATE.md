@@ -147,3 +147,11 @@ check sampled x=500, outside the aspect-fitted 360px square background's [140,50
 bounds. Corrected the fixture sample to x=400, inside both layers. The expected
 opaque red and 50/50 red-blue values are unchanged. This is a test-coordinate
 correction; it does not establish a passing Windows run yet.
+
+Validation complete for 848aada: run 39091002519 passed Windows, Linux and
+recorded-comparison. Windows passed all 10 contracts, including GUI transform,
+layer-order and project-restore checks and alternating desktop colors. Decodes
+passed unchanged criteria: native90 frames, silentGUI29, tone/muteGUI84.
+This is incremental validation; all remaining feature/delivery limitations above
+still apply. Next work should implement camera/device capture or browser sources,
+not repackage this engineering window.
