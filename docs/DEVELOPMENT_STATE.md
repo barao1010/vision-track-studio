@@ -293,3 +293,12 @@ Local project contracts passed ASan+UBSan (detect_leaks=0). Windows validation
 adds an actual2000kbps encoding and decodes it with the unchanged existing
 orientation/color/audio/timestamp thresholds, retaining all default fixtures.
 Validation pending; no final package, approved UI or full parity is claimed.
+
+Bitrate validation completed:ffd8dec run39137089721 passed all3 jobs and18
+Windows contracts. The custom2000kbps target file decoded90frames with unchanged
+color/orientation/timestamp/440Hz criteria; default and24/25/50/60fps fixtures
+also passed. GUI29silent/84tone-mute passed. Local project roundtrip, legacy
+format3 defaults, boundary500/50000 and invalid settings passed ASan+UBSan
+(detect_leaks=0). Actual bitrate under complex scenes/performance is not measured.
+Next prioritize approved UI and rendering outside UI; resolution/profile support,
+browser audio, streaming, extras and installer remain incomplete.
