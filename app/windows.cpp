@@ -16,6 +16,7 @@
 #include "windows_camera.hpp"
 #include "windows_browser.hpp"
 #include "windows_output.hpp"
+#include "recording_rate.hpp"
 #include "audio_buffer.hpp"
 #include "scheduled_output.hpp"
 #include <numbers>
@@ -27,7 +28,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -68,12 +69,14 @@ void recordFrame(std::shared_ptr<const Frame> frame) {
     else level+=L"silencio";
     SetWindowText(GetDlgItem(window,MeterLabel),level.c_str());
 }
+int field(int id);
 void startRecording(const std::filesystem::path& path);
 void stopRecording() {
     if(!recorder) return;
     auto finishing=std::move(recorder);
     EnableWindow(GetDlgItem(window,UseMic),TRUE);
     EnableWindow(GetDlgItem(window,RecordingRate),TRUE);
+    EnableWindow(GetDlgItem(window,VideoBitrate),TRUE);
     SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
     finishing->finish();
 }
@@ -86,10 +89,12 @@ void startRecording(const std::filesystem::path& path) {
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const int fps=chosenRate();
+    const int kbps=field(VideoBitrate);recording_video_bps(kbps);
     auto initial=std::make_shared<Frame>(program->render(now()));
-    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps]{return create_windows_output(path,useMicrophone,testAudio,fps);},initial,std::pow(10.f,db/20.f),muted,fps);
+    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps);},initial,std::pow(10.f,db/20.f),muted,fps);
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
     EnableWindow(GetDlgItem(window,RecordingRate),FALSE);
+    EnableWindow(GetDlgItem(window,VideoBitrate),FALSE);
     recorder=std::move(starting);
     SetWindowText(GetDlgItem(window,Record),useMicrophone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
@@ -137,7 +142,7 @@ void addScene() {
     auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
 }
 Project snapshotProject() {
-    Project p;p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
+    Project p;p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
     p.gain_db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     p.microphone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
     p.muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
@@ -198,6 +203,7 @@ void openProject(const std::filesystem::path& path) {
     SendMessage(scenesBox,LB_RESETCONTENT,0,0);
     for(const auto& label:labels) SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));
     SendMessage(scenesBox,LB_SETCURSEL,selected,0);
+    SetWindowTextW(GetDlgItem(window,VideoBitrate),std::to_wstring(p.video_kbps).c_str());
     auto rateIndex=std::find(recordingRates.begin(),recordingRates.end(),p.recording_fps)-recordingRates.begin();
     SendMessage(GetDlgItem(window,RecordingRate),CB_SETCURSEL,rateIndex,0);
     SendMessage(GetDlgItem(window,Gain),TBM_SETPOS,TRUE,p.gain_db);
@@ -404,6 +410,8 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             auto rate=control(L"COMBOBOX",L"",RecordingRate,600,705,150,160,CBS_DROPDOWNLIST);
             for(int fps:recordingRates) {auto label=std::to_wstring(fps)+L" fps";SendMessage(rate,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
             SendMessage(rate,CB_SETCURSEL,2,0);
+            control(L"STATIC",L"Video kbps (500-50000)",0,15,740,195,20);
+            control(L"EDIT",L"4000",VideoBitrate,15,767,180,25,WS_BORDER|ES_NUMBER);
             control(L"STATIC",L"URL do navegador (HTTP/HTTPS)",0,220,745,370,20);
             control(L"EDIT",L"https://",BrowserUrl,220,767,500,25,WS_BORDER|ES_AUTOHSCROLL);
             control(L"BUTTON",L"Adicionar navegador",AddBrowser,730,767,150,30);

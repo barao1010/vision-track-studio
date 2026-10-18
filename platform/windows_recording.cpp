@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "windows_recording.hpp"
+#include "recording_rate.hpp"
 #include <windows.h>
 #include <mfapi.h>
 #include <mfidl.h>
@@ -48,15 +49,16 @@ struct WindowsRecorder::State {
     std::int64_t frames=0,samples=0;
     bool finished=false,failed=false;
 };
-WindowsRecorder::WindowsRecorder(const std::filesystem::path& path,int w,int h,int fps,int rate):state_(std::make_unique<State>()) {
+WindowsRecorder::WindowsRecorder(const std::filesystem::path& path,int w,int h,int fps,int rate,int video_kbps):state_(std::make_unique<State>()) {
     if(w<=0 || h<=0 || w>4096 || h>4096 || w%2 || h%2 || fps<1 || fps>120 || rate!=48000) throw std::invalid_argument("Unsupported recording format");
+    const auto video_bps=recording_video_bps(video_kbps);
     if(std::filesystem::exists(path)) throw std::invalid_argument("Recording file already exists");
     auto& s=*state_;s.width=w;s.height=h;s.fps=fps;s.rate=rate;
     ComPtr<IMFAttributes> options;checked(MFCreateAttributes(&options,2),"Recorder attributes");
     checked(options->SetUINT32(MF_SINK_WRITER_DISABLE_THROTTLING,TRUE),"Disable throttling");
     checked(MFCreateSinkWriterFromURL(path.c_str(),nullptr,options.Get(),&s.writer),"Open MP4 writer");
     auto output=media();videoType(output.Get(),MFVideoFormat_H264,w,h,fps);
-    checked(output->SetUINT32(MF_MT_AVG_BITRATE,4000000),"Video bitrate");
+    checked(output->SetUINT32(MF_MT_AVG_BITRATE,video_bps),"Video bitrate");
     checked(s.writer->AddStream(output.Get(),&s.video),"Add video stream");
     auto input=media();videoType(input.Get(),MFVideoFormat_RGB32,w,h,fps);
     checked(input->SetUINT32(MF_MT_DEFAULT_STRIDE,w*4),"Video stride");

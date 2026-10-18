@@ -7,7 +7,7 @@ namespace vision {
 // Uses installed Windows encoders, not OBS or a bundled FFmpeg build.
 class WindowsRecorder {
 public:
-    WindowsRecorder(const std::filesystem::path& path,int width,int height,int fps,int sample_rate=48000);
+    WindowsRecorder(const std::filesystem::path& path,int width,int height,int fps,int sample_rate=48000,int video_kbps=4000);
     ~WindowsRecorder();
     WindowsRecorder(const WindowsRecorder&)=delete;
     WindowsRecorder& operator=(const WindowsRecorder&)=delete;

@@ -279,3 +279,17 @@ decodes passed unchanged; GUI29silent/85tone-mute. No hardware validation,
 browser audio or full-functionality equivalence is implied. Next prioritize
 approved UI integration and browser/audio lifecycle; remaining streaming,
 profiles, extras and installer must still be implemented before delivery.
+
+## Configurable H264 target bitrate — 2026-10-18
+
+The recording target is now configurable from500 to50000kbps, default4000.
+The validated value reaches MF_MT_AVG_BITRATE on the encoder worker. It is a
+target average bitrate, not guaranteed constant bitrate or measured throughput.
+The control is locked during recording. Project format4 persists video_kbps;
+formats1/2/3 retain4000kbps on load. Bad values reject before replacing project
+state or creating the recording file. Audio remains fixed192kbps AAC, canvas
+640x360; full resolution/profile controls remain pending. No new dependency.
+Local project contracts passed ASan+UBSan (detect_leaks=0). Windows validation
+adds an actual2000kbps encoding and decodes it with the unchanged existing
+orientation/color/audio/timestamp thresholds, retaining all default fixtures.
+Validation pending; no final package, approved UI or full parity is claimed.

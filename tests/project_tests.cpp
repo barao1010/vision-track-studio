@@ -14,8 +14,11 @@ int main(int argc,char** argv) {
     p.sources.push_back({"camera",SourceKind::camera,"device-symbolic-link",{0,0,0,1}});
     SourceDefinition browser{"web",SourceKind::browser,"https://example.invalid/overlay",{0,0,0,1}};
     browser.css="body { color: white; }";p.sources.push_back(browser);
-    p.recording_fps=25;
+    p.recording_fps=25;p.video_kbps=8000;
+    check(decode_project("VISION_PROJECT 3\n0 0 0 0 0 30\n0\n1\n\"Legacy\" 0\n").video_kbps==4000);
+    for(int value:{-1,0,499,50001,2147483647}) {auto invalid=p;invalid.video_kbps=value;rejects([&]{encode_project(invalid);});}
     check(decode_project("VISION_PROJECT 1\n0 0 0 0 0\n0\n1\n\"Legacy\" 0\n").recording_fps==30);
+    for(int value:{500,50000}) {auto valid=p;valid.video_kbps=value;check(decode_project(encode_project(valid)).video_kbps==value);}
     p.selected_scene=1;p.gain_db=6;p.microphone=true;
     auto text=encode_project(p);auto roundtrip=decode_project(text);check(encode_project(roundtrip)==text);
     auto file=base/"project.vts";save_project(file,p);check(encode_project(load_project(file))==text);
