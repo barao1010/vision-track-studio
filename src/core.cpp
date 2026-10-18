@@ -41,6 +41,18 @@ void Scene::add(Item i) {
     require(std::none_of(items_.begin(),items_.end(),[&](auto& v){return v.id==i.id;}),"Duplicate item");
     items_.push_back(std::move(i));
 }
+void Scene::transform(const std::string& id,int x,int y,int width,int height,
+                      Crop crop,float opacity,std::int64_t timestamp) {
+    auto& target=item(id);
+    require(width>0 && height>0 && width<=16384 && height<=16384,"Invalid source size");
+    require(std::isfinite(opacity) && opacity>=0 && opacity<=1,"Invalid opacity");
+    require(crop.left>=0 && crop.right>=0 && crop.top>=0 && crop.bottom>=0,"Negative crop");
+    const auto frame=target.source->frame(timestamp);
+    require(static_cast<std::int64_t>(crop.left)+crop.right<frame.width() &&
+            static_cast<std::int64_t>(crop.top)+crop.bottom<frame.height(),"Crop removes entire source");
+    target.x=x;target.y=y;target.width=width;target.height=height;
+    target.crop=crop;target.opacity=opacity;
+}
 void Scene::remove(const std::string& id) {
     item(id);
     std::erase_if(items_,[&](auto& i){return i.id==id;});

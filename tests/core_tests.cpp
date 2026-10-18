@@ -24,6 +24,16 @@ int main() {
     Scene crop;crop.add({"s",std::make_shared<StillSource>(stripe),-1,0,3,1,{1,0,0,0}});
     f=crop.render(2,1,0);near(f.at(0,0).g,1);near(f.at(1,0).g,1);
     crop.item("s").crop.right=1;rejects([&]{crop.render(2,1,0);});
+    // Edits are transactional, including hidden layers and extreme crop values.
+    crop.item("s").crop.right=0;
+    crop.transform("s",1,0,1,1,{0,0,1,0},.25f,0);
+    f=crop.render(2,1,0);near(f.at(0,0).a,0);near(f.at(1,0).r,1);near(f.at(1,0).a,.25f);
+    crop.item("s").visible=false;
+    rejects([&]{crop.transform("s",0,0,0,1,{},1,0);});
+    rejects([&]{crop.transform("s",0,0,1,1,{std::numeric_limits<int>::max(),0,1,0},1,0);});
+    rejects([&]{crop.transform("s",0,0,1,1,{},std::numeric_limits<float>::quiet_NaN(),0);});
+    check(crop.item("s").x==1 && crop.item("s").crop.right==1);
+    near(crop.item("s").opacity,.25f);
     // Fade endpoints, midpoint, interruption continuity, cut, invalid clock.
     Switcher sw(2,2,red);sw.take(blue,0,100);
     near(sw.render(0).at(0,0).r,1);f=sw.render(50);near(f.at(0,0).r,.5f);near(f.at(0,0).b,.5f);

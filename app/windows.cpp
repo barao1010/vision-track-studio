@@ -10,6 +10,8 @@
 #include "core.hpp"
 #include "project.hpp"
 #include <map>
+#include <charconv>
+#include <array>
 #include "windows_desktop.hpp"
 #include "windows_output.hpp"
 #include "audio_buffer.hpp"
@@ -22,7 +24,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -107,11 +109,12 @@ Frame imageFile(const wchar_t* name) {
     for(UINT y=0;y<h;++y) for(UINT x=0;x<w;++x) {auto offset=(static_cast<std::size_t>(y)*w+x)*4;output.at(static_cast<int>(x),static_cast<int>(y))={linear(bytes[offset]),linear(bytes[offset+1]),linear(bytes[offset+2]),bytes[offset+3]/255.f};}
     return output;
 }
+void loadTransform();
 void refresh() {
     SendMessage(sourcesBox,LB_RESETCONTENT,0,0);
     for(const auto& id:ids.at(selected)) {auto label=wide(id);if(!scenes[selected]->item(id).visible) label+=L" (oculta)";SendMessage(sourcesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
     if(!ids[selected].empty()) SendMessage(sourcesBox,LB_SETCURSEL,ids[selected].size()-1,0);
-    InvalidateRect(window,nullptr,FALSE);
+    loadTransform();InvalidateRect(window,nullptr,FALSE);
 }
 void addSource(Frame image,SourceDefinition definition) {
     auto id=nextId("Imagem ");
@@ -186,6 +189,31 @@ void openProject(const std::filesystem::path& path) {
     SendMessage(GetDlgItem(window,Mute),BM_SETCHECK,p.muted?BST_CHECKED:BST_UNCHECKED,0);refresh();
 }
 Item* selectedItem() {auto index=SendMessage(sourcesBox,LB_GETCURSEL,0,0);if(index==LB_ERR) return nullptr;return &scenes[selected]->item(ids[selected].at(static_cast<std::size_t>(index)));}
+void loadTransform() {
+    auto* item=selectedItem();
+    std::array<int,9> values{};
+    if(item) values={item->x,item->y,item->width,item->height,item->crop.left,item->crop.top,item->crop.right,item->crop.bottom,static_cast<int>(std::lround(item->opacity*100))};
+    for(int n=0;n<9;++n) {
+        auto edit=GetDlgItem(window,TransformFirst+n);EnableWindow(edit,item!=nullptr);
+        auto value=item?std::to_wstring(values[n]):L"";SetWindowText(edit,value.c_str());
+    }
+    EnableWindow(GetDlgItem(window,ApplyTransform),item!=nullptr);
+}
+int field(int id) {
+    auto edit=GetDlgItem(window,id);int length=GetWindowTextLengthA(edit);
+    if(length<1 || length>12) throw std::invalid_argument("Enter an integer for each transform field");
+    char text[16]{};GetWindowTextA(edit,text,sizeof(text));int value=0;
+    auto result=std::from_chars(text,text+length,value);
+    if(result.ec!=std::errc{} || result.ptr!=text+length) throw std::invalid_argument("Invalid transform integer");
+    return value;
+}
+void pruneDefinitions() {
+    std::erase_if(definitions,[](const auto& entry) {
+        for(std::size_t n=0;n<scenes.size();++n)
+            for(const auto& key:ids[n]) if(scenes[n]->item(key).source==entry.first) return false;
+        return true;
+    });
+}
 void command(int id) {
     if(id==UseMic || id==Mute) return;
     if(id==SaveProject || id==OpenProject) {
@@ -221,10 +249,27 @@ void command(int id) {
         if(GetOpenFileName(&ofn)) addSource(imageFile(path),{"",SourceKind::image,utf8(std::filesystem::absolute(path)),{0,0,0,1}});
     } else if(id==Cut || id==Fade) {program->take(scenes[selected],now(),id==Cut?0:300000000);programScene=selected;}
     else if(auto* item=selectedItem()) {
+        const auto key=item->id;
+        if(id==ApplyTransform) {
+            std::array<int,9> v{};for(int n=0;n<9;++n) v[n]=field(TransformFirst+n);
+            if(v[8]<0 || v[8]>100) throw std::invalid_argument("Opacity must be between 0 and 100");
+            scenes[selected]->transform(key,v[0],v[1],v[2],v[3],{v[4],v[5],v[6],v[7]},v[8]/100.f,now());
+        }
+        if(id==LayerUp || id==LayerDown) {
+            auto& keys=ids[selected];auto position=std::find(keys.begin(),keys.end(),key)-keys.begin();
+            auto target=position+(id==LayerUp?1:-1);
+            if(target>=0 && target<static_cast<std::ptrdiff_t>(keys.size())) {
+                scenes[selected]->move(key,static_cast<std::size_t>(target));
+                std::swap(keys[static_cast<std::size_t>(position)],keys[static_cast<std::size_t>(target)]);
+            }
+        }
         if(id==Toggle) item->visible=!item->visible;
         if(id==Smaller || id==Larger) {double factor=id==Smaller?.9:1.1;item->width=std::clamp(static_cast<int>(item->width*factor),1,8192);item->height=std::clamp(static_cast<int>(item->height*factor),1,8192);item->x=(640-item->width)/2;item->y=(360-item->height)/2;}
-        if(id==Remove) {auto key=item->id;scenes[selected]->remove(key);std::erase(ids[selected],key);}
+        if(id==Remove) {auto key=item->id;scenes[selected]->remove(key);std::erase(ids[selected],key);pruneDefinitions();}
         refresh();
+        auto it=std::find(ids[selected].begin(),ids[selected].end(),key);
+        if(it!=ids[selected].end()) SendMessage(sourcesBox,LB_SETCURSEL,it-ids[selected].begin(),0);
+        loadTransform();
     }
 }
 void draw(HDC dc,const Frame& f,int x,int y,int w,int h) {
@@ -247,7 +292,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             scenesBox=control(L"LISTBOX",L"",SceneList,15,40,180,150,LBS_NOTIFY|WS_BORDER|WS_VSCROLL);
             control(L"BUTTON",L"Adicionar cena",AddScene,15,195,180,30);
             control(L"STATIC",L"Fontes da previa",0,15,235,180,25);
-            sourcesBox=control(L"LISTBOX",L"",SourceList,15,260,180,120,WS_BORDER|WS_VSCROLL);
+            sourcesBox=control(L"LISTBOX",L"",SourceList,15,260,180,120,LBS_NOTIFY|WS_BORDER|WS_VSCROLL);
             control(L"BUTTON",L"Adicionar imagem",AddImage,15,385,180,30);
             control(L"BUTTON",L"Mostrar / ocultar",Toggle,15,420,180,30);
             control(L"BUTTON",L"Remover fonte",Remove,15,455,180,30);
@@ -266,9 +311,20 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"STATIC",L"Nivel: aguardando gravacao",MeterLabel,540,435,300,30);
             control(L"BUTTON",L"Salvar projeto",SaveProject,220,490,180,30);
             control(L"BUTTON",L"Abrir projeto",OpenProject,420,490,180,30);
+            control(L"BUTTON",L"Subir camada",LayerUp,620,490,125,30);
+            control(L"BUTTON",L"Descer camada",LayerDown,755,490,125,30);
+            const wchar_t* labels[]={L"X",L"Y",L"Largura",L"Altura",L"Corte esq.",L"Corte topo",L"Corte dir.",L"Corte base",L"Opacidade %"};
+            for(int n=0;n<9;++n) {
+                int x=220+(n%5)*132,y=535+(n/5)*62;
+                control(L"STATIC",labels[n],0,x,y,126,20);
+                auto edit=control(L"EDIT",L"",TransformFirst+n,x,y+22,120,26,WS_BORDER|ES_AUTOHSCROLL);
+                SendMessage(edit,EM_SETLIMITTEXT,12,0);
+            }
+            control(L"BUTTON",L"Aplicar",ApplyTransform,748,619,130,30);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
+            else if(LOWORD(wp)==SourceList && HIWORD(wp)==LBN_SELCHANGE) loadTransform();
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
         case WM_TIMER:
             if(smoke) {
@@ -277,7 +333,19 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                 if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,SaveProject,0);auto savedState=encode_project(snapshotProject());SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());SendMessage(hwnd,WM_COMMAND,OpenProject,0);verify(encode_project(snapshotProject())==savedState);verify(program->render(now()).at(320,180).b==1);
                     auto before=encode_project(snapshotProject());std::ofstream("invalid-project.vts")<<"VISION_PROJECT 99";
                     bool rejected=false;try {openProject(L"invalid-project.vts");}catch(const std::exception&) {rejected=true;}
-                    verify(rejected && encode_project(snapshotProject())==before);std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
+                    verify(rejected && encode_project(snapshotProject())==before);
+                    SetWindowText(GetDlgItem(hwnd,TransformFirst),L"320");
+                    SetWindowText(GetDlgItem(hwnd,TransformFirst+2),L"320");
+                    SetWindowText(GetDlgItem(hwnd,TransformFirst+8),L"50");
+                    SendMessage(hwnd,WM_COMMAND,ApplyTransform,0);
+                    auto transformed=program->render(now());verify(transformed.at(10,180).a==0 && transformed.at(500,180).a==.5f);
+                    addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});
+                    verify(program->render(now()).at(500,180).r==1);
+                    SendMessage(hwnd,WM_COMMAND,LayerDown,0);
+                    auto layered=program->render(now());verify(layered.at(500,180).r==.5f && layered.at(500,180).b==.5f);
+                    SendMessage(hwnd,WM_COMMAND,SaveProject,0);SendMessage(hwnd,WM_COMMAND,OpenProject,0);
+                    verify(program->render(now()).at(500,180).b==.5f);
+                    std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
             captureRecording(now());
@@ -305,7 +373,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     if(!InitCommonControlsEx(&common)) {MFShutdown();CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
     if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
-    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,590,nullptr,nullptr,instance,nullptr);
+    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,710,nullptr,nullptr,instance,nullptr);
     if(!main) {MFShutdown();CoUninitialize();return 1;}ShowWindow(main,show);
     MSG message{};int status;
     while((status=GetMessage(&message,nullptr,0,0))>0) {TranslateMessage(&message);DispatchMessage(&message);}

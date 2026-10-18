@@ -45,6 +45,9 @@ public:
     void remove(const std::string& id);
     void move(const std::string& id, std::size_t position);
     Item& item(const std::string& id);
+    // Validates against the current source frame before changing the item.
+    void transform(const std::string& id,int x,int y,int width,int height,
+                   Crop crop,float opacity,std::int64_t timestamp_ns);
     Frame render(int width, int height, std::int64_t timestamp_ns) const;
 private:
     std::vector<Item> items_; // bottom to top

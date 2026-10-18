@@ -115,3 +115,22 @@ blue program pixels, and preserve state on invalid-file failure. Windows CI
 validation is pending for this increment. The window remains an engineering
 harness, and no partial delivery is authorized. Device capture, browser, final
 interface, streaming and the other missing features still require implementation.
+
+Persistence validation: d1b429d passed all jobs in run 39076646915; 10 Windows
+contracts, native 90-frame decode, silent GUI 27 frames, tone/mute GUI 84 frames.
+This includes GUI save/reopen/state-preservation checks, not hardware validation.
+
+## Transform editing increment — 2026-10-18
+
+Added transactional Scene::transform validation and connected position, dimensions,
+four crop edges and opacity percent to engineering-window controls. Layer up/down
+changes both the compositor order and serialized order. Selection remains on the
+moved item. Removing the last reference to a source releases its descriptor's
+strong reference rather than retaining every removed image until project close.
+Core pixel tests cover crop/position/opacity and reject invalid edits even on
+hidden layers without changing their prior state; local warning-clean and
+ASan+UBSan passed (detect_leaks=0). GUI tests now apply a half-width transparent
+layer, check pixels, reorder against a red background, and save/reopen that order.
+Windows CI remains pending for this increment. No final interface or installer
+has been delivered. Next work remains camera/device lifecycle, browser sources,
+scheduler, streaming and approved interface, followed by extras and packaging.
