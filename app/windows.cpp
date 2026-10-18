@@ -16,6 +16,7 @@
 #include "windows_camera.hpp"
 #include "windows_output.hpp"
 #include "audio_buffer.hpp"
+#include "scheduled_output.hpp"
 #include <numbers>
 #include <algorithm>
 #include <chrono>
@@ -52,13 +53,11 @@ std::string nextId(const std::string& prefix) {
 }
 bool smoke=false, smokeAudio=false;
 int smokeStep=0;
-std::unique_ptr<OutputWorker> recorder;
-std::int64_t recordStart=0, recordFrames=0;
+std::unique_ptr<ScheduledOutput> recorder;
 void recordFrame(std::shared_ptr<const Frame> frame) {
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
-    recorder->enqueue({std::move(frame),recordFrames,audio_sample_time(recordStart)+recordFrames*1600,std::pow(10.f,db/20.f),muted});
-    ++recordFrames;
+    recorder->update(std::move(frame),std::pow(10.f,db/20.f),muted);
     const auto meter=recorder->meter();
     std::wstring level=L"Nivel: ";
     if(meter.peak>0) level+=std::to_wstring(static_cast<int>(std::lround(20*std::log10(meter.peak))))+L" dBFS";
@@ -79,20 +78,17 @@ void startRecording(const std::filesystem::path& path) {
     if(recorder) throw std::logic_error("Recording already active");
     const bool useMicrophone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
     const bool testAudio=smokeAudio;
-    auto starting=std::make_unique<OutputWorker>([path,useMicrophone,testAudio]{return create_windows_output(path,useMicrophone,testAudio);});
+    const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
+    const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
+    auto initial=std::make_shared<Frame>(program->render(now()));
+    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio]{return create_windows_output(path,useMicrophone,testAudio);},initial,std::pow(10.f,db/20.f),muted);
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
-    recordStart=now();recordFrames=0;recorder=std::move(starting);
-    recordFrame(std::make_shared<Frame>(program->render(recordStart)));
+    recorder=std::move(starting);
     SetWindowText(GetDlgItem(window,Record),useMicrophone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
 void captureRecording(std::int64_t timestamp) {
     if(!recorder) return;
-    const auto due=(timestamp-recordStart)*30/1000000000+1;
-    if(due-recordFrames>300) throw std::runtime_error("Recording stopped: capture stalled for over ten seconds");
-    if(due>recordFrames) {
-        auto frame=std::make_shared<Frame>(program->render(timestamp));
-        while(recordFrames<due) recordFrame(frame);
-    }
+    recordFrame(std::make_shared<Frame>(program->render(timestamp)));
 }
 void hr(HRESULT r) {if(FAILED(r)) throw std::runtime_error("Windows image decoder failed");}
 float linear(BYTE b) {float s=b/255.f;return s<=.04045f?s/12.92f:std::pow((s+.055f)/1.055f,2.4f);}

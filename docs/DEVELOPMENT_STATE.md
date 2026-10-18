@@ -193,3 +193,21 @@ frames with unchanged criteria. Earlier bc62dbd run39093079553 also passed.
 These tests do not activate a physical camera or validate device reconnection.
 Next implement browser/CSS sources or scheduler/approved interface integration;
 streaming, extras and complete delivery remain outstanding.
+
+## Independent output clock — 2026-10-18 (Windows validation pending)
+
+ScheduledOutput now owns 30fps/48kHz recording deadlines on its sink worker. UI
+updates replace a single immutable video/gain/mute snapshot; stalled repaint
+holds the last picture while audio and encoder timestamps keep advancing. This
+removes the UI catch-up loop and queue-full failures caused by delayed repaint.
+An encoder more than10s behind fails explicitly. Factory, writes, finish and
+destruction stay on one worker. Start waits for the first encoded frame and stop
+waits for the in-flight write/finalization, so both still can block the UI.
+Capture/composition, camera polling and transitions still run on the UI thread;
+this is NOT a complete rendering scheduler or validation of physical A/V sync.
+
+Tests block the encoder, replace1000 snapshots without enqueue/backpressure,
+verify held frames without producer updates, contiguous frame/audio positions,
+latest gain/mute, thread affinity, shutdown and initialization failure. Local
+warning-clean and ASan+UBSan passed (detect_leaks=0). Windows decode regressions
+must pass unchanged. Browser/CSS, approved interface, streaming and extras remain.
