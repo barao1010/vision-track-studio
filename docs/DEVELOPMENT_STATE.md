@@ -222,3 +222,10 @@ rates and full output profiles remain unimplemented.
 Rate tests verify scheduled audio intervals for all5 rates. Native Windows output
 fixtures now encode/decode3 seconds at each rate with the same orientation,
 color, timestamp and audio criteria as the existing30fps test. Validation pending.
+
+Rate validation completed:5311830 run39110294755 passed all3 jobs,16 Windows
+contracts and real H264/AAC decodes of72/75/90/150/180 frames at24/25/30/50/60fps.
+Orientation, audio tone level/frequency and timestamps retained the existing
+thresholds. GUI silence29frames and tone/mute83frames also passed. Local rate
+and project tests passed ASan+UBSan (detect_leaks=0). No hardware validation or
+full OBS equivalence is implied. Next priority: browser/CSS and approved UI.

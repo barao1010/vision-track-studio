@@ -1,7 +1,7 @@
 #pragma once
 #include "output_worker.hpp"
 namespace vision {
-// Fixed 30 fps / 48 kHz output clock, independent of UI repaint frequency.
+// Selected integer fps / 48 kHz output clock, independent of UI repaint frequency.
 // The newest immutable video/control snapshot replaces older unpublished ones.
 // Capture/composition remain producer responsibilities.
 class ScheduledOutput {
