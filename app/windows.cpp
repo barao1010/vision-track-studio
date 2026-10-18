@@ -14,6 +14,7 @@
 #include <array>
 #include "windows_desktop.hpp"
 #include "windows_camera.hpp"
+#include "windows_browser.hpp"
 #include "windows_output.hpp"
 #include "audio_buffer.hpp"
 #include "scheduled_output.hpp"
@@ -26,7 +27,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -158,7 +159,10 @@ void openProject(const std::filesystem::path& path) {
     decltype(definitions) candidateDefinitions;
     for(auto definition:p.sources) {
         std::shared_ptr<const VideoSource> source;
-        if(definition.kind==SourceKind::camera) {
+        if(definition.kind==SourceKind::browser) {
+            source=std::make_shared<BrowserSource>(wide(definition.path),definition.css.empty()?L"":wide(definition.css),definition.browser_width,definition.browser_height);
+        }
+        else if(definition.kind==SourceKind::camera) {
             // Reuse an already-open device; a transactional project open must not
             // acquire the same physical device twice.
             for(const auto& entry:definitions) if(entry.second.kind==SourceKind::camera && entry.second.path==definition.path) {source=entry.first;break;}
@@ -233,6 +237,14 @@ void refreshCameras() {
 }
 void command(int id) {
     if(id==UseMic || id==Mute) return;
+    if(id==AddBrowser) {
+        auto read=[](int control) {auto handle=GetDlgItem(window,control);int n=GetWindowTextLengthW(handle);std::wstring text(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,text.data(),n+1);text.resize(n);return text;};
+        auto url=read(BrowserUrl),css=read(BrowserCss);
+        auto source=std::make_shared<BrowserSource>(url,css,640,360);auto key=nextId("Navegador ");
+        SourceDefinition definition{key,SourceKind::browser,utf8(std::filesystem::path(url)),{0,0,0,1}};
+        definition.css=utf8(std::filesystem::path(css));definitions.emplace(source,std::move(definition));
+        scenes[selected]->add({key,source,0,0,640,360,{}});ids[selected].push_back(key);refresh();return;
+    }
     if(id==RefreshCameras) {refreshCameras();return;}
     if(id==AddCamera) {
         auto index=SendMessage(GetDlgItem(window,CameraList),CB_GETCURSEL,0,0);
@@ -371,6 +383,12 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             auto rate=control(L"COMBOBOX",L"",RecordingRate,600,705,150,160,CBS_DROPDOWNLIST);
             for(int fps:recordingRates) {auto label=std::to_wstring(fps)+L" fps";SendMessage(rate,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
             SendMessage(rate,CB_SETCURSEL,2,0);
+            control(L"STATIC",L"URL do navegador (HTTP/HTTPS)",0,220,745,370,20);
+            control(L"EDIT",L"https://",BrowserUrl,220,767,500,25,WS_BORDER|ES_AUTOHSCROLL);
+            control(L"BUTTON",L"Adicionar navegador",AddBrowser,730,767,150,30);
+            control(L"STATIC",L"CSS personalizado (fonte visual; audio pendente)",0,220,802,650,20);
+            auto css=control(L"EDIT",L"html,body { background: transparent !important; margin: 0; }",BrowserCss,220,824,660,65,WS_BORDER|ES_MULTILINE|ES_AUTOVSCROLL|WS_VSCROLL);
+            SendMessage(css,EM_SETLIMITTEXT,65536,0);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
@@ -423,7 +441,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     if(!InitCommonControlsEx(&common)) {MFShutdown();CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
     if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
-    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,790,nullptr,nullptr,instance,nullptr);
+    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,950,nullptr,nullptr,instance,nullptr);
     if(!main) {MFShutdown();CoUninitialize();return 1;}ShowWindow(main,show);
     MSG message{};int status;
     while((status=GetMessage(&message,nullptr,0,0))>0) {TranslateMessage(&message);DispatchMessage(&message);}

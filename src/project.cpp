@@ -34,8 +34,10 @@ void validate_project(const Project& p) {
     std::set<std::string> sources,cameras;
     for(const auto& s:p.sources) {
         string_ok(s.id,128);string_ok(s.path,32768,true);require(sources.insert(s.id).second);
-        require(s.kind==SourceKind::image || s.kind==SourceKind::desktop || s.kind==SourceKind::solid || s.kind==SourceKind::camera);
-        require((s.kind!=SourceKind::image && s.kind!=SourceKind::camera) || !s.path.empty());
+        require(s.kind==SourceKind::image || s.kind==SourceKind::desktop || s.kind==SourceKind::solid || s.kind==SourceKind::camera || s.kind==SourceKind::browser);
+        require((s.kind!=SourceKind::image && s.kind!=SourceKind::camera && s.kind!=SourceKind::browser) || !s.path.empty());
+        string_ok(s.css,65536,true);
+        require(s.browser_width>0 && s.browser_width<=1920 && s.browser_height>0 && s.browser_height<=1080);
         if(s.kind==SourceKind::camera) require(cameras.insert(s.path).second);
         require(unit(s.color.r) && unit(s.color.g) && unit(s.color.b) && unit(s.color.a));
     }
@@ -54,8 +56,8 @@ void validate_project(const Project& p) {
 }
 std::string encode_project(const Project& p) {
     validate_project(p);std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(std::numeric_limits<float>::max_digits10);
-    out<<"VISION_PROJECT 2\n"<<p.selected_scene<<' '<<p.program_scene<<' '<<p.gain_db<<' '<<p.microphone<<' '<<p.muted<<' '<<p.recording_fps<<'\n'<<p.sources.size()<<'\n';
-    for(const auto& s:p.sources) out<<std::quoted(s.id)<<' '<<static_cast<int>(s.kind)<<' '<<std::quoted(s.path)<<' '<<s.color.r<<' '<<s.color.g<<' '<<s.color.b<<' '<<s.color.a<<'\n';
+    out<<"VISION_PROJECT 3\n"<<p.selected_scene<<' '<<p.program_scene<<' '<<p.gain_db<<' '<<p.microphone<<' '<<p.muted<<' '<<p.recording_fps<<'\n'<<p.sources.size()<<'\n';
+    for(const auto& s:p.sources) out<<std::quoted(s.id)<<' '<<static_cast<int>(s.kind)<<' '<<std::quoted(s.path)<<' '<<s.color.r<<' '<<s.color.g<<' '<<s.color.b<<' '<<s.color.a<<' '<<std::quoted(s.css)<<' '<<s.browser_width<<' '<<s.browser_height<<'\n';
     out<<p.scenes.size()<<'\n';
     for(const auto& scene:p.scenes) {
         out<<std::quoted(scene.name)<<' '<<scene.items.size()<<'\n';
@@ -65,12 +67,13 @@ std::string encode_project(const Project& p) {
 }
 Project decode_project(const std::string& text) {
     require(text.size()<=max_bytes);std::istringstream in(text);in.imbue(std::locale::classic());
-    std::string magic;int version=0;require(bool(in>>magic>>version) && magic=="VISION_PROJECT" && (version==1 || version==2));
+    std::string magic;int version=0;require(bool(in>>magic>>version) && magic=="VISION_PROJECT" && (version>=1 && version<=3));
     Project p;require(bool(in>>p.selected_scene>>p.program_scene>>p.gain_db>>p.microphone>>p.muted));
-    if(version==2) require(bool(in>>p.recording_fps));
+    if(version>=2) require(bool(in>>p.recording_fps));
     auto sources=count(in,1000);
     for(std::size_t n=0;n<sources;++n) {
         SourceDefinition s;int kind=0;require(bool(in>>std::quoted(s.id)>>kind>>std::quoted(s.path)>>s.color.r>>s.color.g>>s.color.b>>s.color.a));
+        if(version>=3) require(bool(in>>std::quoted(s.css)>>s.browser_width>>s.browser_height));
         s.kind=static_cast<SourceKind>(kind);p.sources.push_back(std::move(s));
     }
     auto scenes=count(in,100);std::size_t total=0;

@@ -229,3 +229,25 @@ Orientation, audio tone level/frequency and timestamps retained the existing
 thresholds. GUI silence29frames and tone/mute83frames also passed. Local rate
 and project tests passed ASan+UBSan (detect_leaks=0). No hardware validation or
 full OBS equivalence is implied. Next priority: browser/CSS and approved UI.
+
+## Browser source increment — 2026-10-18 (Windows validation pending)
+
+Original WebView2 adapter renders HTTP/HTTPS or inline test HTML, applies custom
+CSS after navigation, and captures PNG through WIC into linear straight-alpha
+frames. Capture is asynchronous and limited to10Hz with one outstanding request;
+host is an offscreen window with a pumping STA loop. Transparent while loading;
+initialization/capture errors are explicit. This is not a production60fps browser
+compositor. Browser audio is explicitly muted, and audio routing remains pending.
+Permissions and new windows are denied. Source URL/CSS and size are persisted in
+project version3, retaining reads of versions1/2. Engineering controls add URL/CSS
+sources; editing existing source settings is still pending.
+Actual WebView2 pixel test uses inline HTML: CSS changes blue to red while empty
+background must remain transparent. It must pass, not merely compile.
+
+Dependency review: downloaded Microsoft.Web.WebView2 SDK1.0.3537.50 from NuGet;
+LICENSE.txt permits source/binary redistribution with notice/disclaimer and no
+endorsement. Preserved verbatim at licenses/WebView2-SDK.txt. CMake pins package
+SHA256 5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa.
+Only SDK loader is linked; Edge WebView2 Runtime must be installed separately.
+Runtime redistribution/installer and third-party notice packaging remain pending.
+This does not import OBS or Streamlabs code. No final package is published.

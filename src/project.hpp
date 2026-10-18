@@ -2,12 +2,14 @@
 #include "core.hpp"
 #include <filesystem>
 namespace vision {
-enum class SourceKind { image=0, desktop=1, solid=2, camera=3 };
+enum class SourceKind { image=0, desktop=1, solid=2, camera=3, browser=4 };
 struct SourceDefinition {
     std::string id;
     SourceKind kind=SourceKind::solid;
     std::string path; // UTF-8 image path (relative to project), or camera symbolic link
     Pixel color{0,0,0,1};
+    std::string css{};
+    int browser_width=640,browser_height=360;
 };
 struct SavedItem {
     std::string id,source;

@@ -104,3 +104,24 @@ if(WIN32)
     add_test(NAME windows_recording_${fps} COMMAND windows_recording_test ${CMAKE_CURRENT_BINARY_DIR}/native-${fps}.mp4 ${fps})
   endforeach()
 endif()
+
+if(WIN32)
+  include(FetchContent)
+  FetchContent_Declare(webview2
+    URL https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3537.50/microsoft.web.webview2.1.0.3537.50.nupkg
+    DOWNLOAD_NAME webview2.zip
+    URL_HASH SHA256=5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa)
+  FetchContent_MakeAvailable(webview2)
+  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "Browser source currently requires x64 Windows")
+  endif()
+  add_library(vision_windows_browser platform/windows_browser.cpp)
+  target_include_directories(vision_windows_browser PUBLIC platform PRIVATE ${webview2_SOURCE_DIR}/build/native/include)
+  target_link_libraries(vision_windows_browser PUBLIC vision_core windowscodecs ole32 shell32 shlwapi version
+    ${webview2_SOURCE_DIR}/build/native/x64/WebView2LoaderStatic.lib)
+  target_link_libraries(vision_studio PRIVATE vision_windows_browser)
+  add_executable(windows_browser_tests tests/windows_browser_tests.cpp)
+  target_link_libraries(windows_browser_tests PRIVATE vision_windows_browser)
+  add_test(NAME windows_browser_pixels COMMAND windows_browser_tests)
+  set_tests_properties(windows_browser_pixels PROPERTIES TIMEOUT 40 RUN_SERIAL TRUE)
+endif()
