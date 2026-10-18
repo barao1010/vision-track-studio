@@ -39,6 +39,7 @@ struct BrowserSource::State {
     HWND host=nullptr;
     int width=0,height=0;
     bool ready=false,pending=false,closed=false;
+    std::uint64_t generation=0;
     std::wstring url,css,html;
     ComPtr<ICoreWebView2Controller> controller;
     ComPtr<ICoreWebView2> web;
@@ -81,6 +82,10 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
                             RECT bounds{0,0,s->width,s->height};check(controller->put_Bounds(bounds));check(controller->put_IsVisible(TRUE));
                             ComPtr<ICoreWebView2Controller2> color;check(controller->QueryInterface(IID_PPV_ARGS(&color)));
                             check(color->put_DefaultBackgroundColor({0,0,0,0}));
+                            ComPtr<ICoreWebView2Controller3> scale;check(controller->QueryInterface(IID_PPV_ARGS(&scale)));
+                            check(scale->put_ShouldDetectMonitorScaleChanges(FALSE));check(scale->put_RasterizationScale(1.0));
+                            ComPtr<ICoreWebView2Settings> settings;check(s->web->get_Settings(&settings));
+                            check(settings->put_AreDefaultScriptDialogsEnabled(FALSE));
                             ComPtr<ICoreWebView2_8> audio;check(s->web.As(&audio));check(audio->put_IsMuted(TRUE));
                             EventRegistrationToken token{};
                             check(s->web->add_PermissionRequested(Callback<ICoreWebView2PermissionRequestedEventHandler>(
@@ -89,7 +94,7 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
                                 [](ICoreWebView2*,ICoreWebView2NewWindowRequestedEventArgs* args)->HRESULT {return args->put_Handled(TRUE);}).Get(),&token));
                             check(s->web->add_NavigationStarting(Callback<ICoreWebView2NavigationStartingEventHandler>(
                                 [weak](ICoreWebView2*,ICoreWebView2NavigationStartingEventArgs*)->HRESULT {
-                                    auto s=weak.lock();if(s && !s->closed) {s->ready=false;s->latest.reset();s->started=std::chrono::steady_clock::now();}
+                                    auto s=weak.lock();if(s && !s->closed) {s->ready=false;++s->generation;s->latest.reset();s->started=std::chrono::steady_clock::now();}
                                     return S_OK;
                                 }).Get(),&token));
                             check(s->web->add_NavigationCompleted(Callback<ICoreWebView2NavigationCompletedEventHandler>(
@@ -98,8 +103,9 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
                                     try {
                                         BOOL success=FALSE;check(args->get_IsSuccess(&success));if(!success) throw std::runtime_error("Browser navigation failed");
                                         auto script=L"(()=>{const s=document.createElement('style');s.textContent="+quoted(s->css)+L";document.documentElement.appendChild(s);})()";
+                                        auto generation=s->generation;
                                         check(s->web->ExecuteScript(script.c_str(),Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-                                            [weak](HRESULT result,LPCWSTR)->HRESULT {auto s=weak.lock();if(!s || s->closed) return S_OK;try{check(result);s->ready=true;}catch(...){s->fail();}return S_OK;}).Get()));
+                                            [weak,generation](HRESULT result,LPCWSTR)->HRESULT {auto s=weak.lock();if(!s || s->closed || generation!=s->generation) return S_OK;try{check(result);s->ready=true;}catch(...){s->fail();}return S_OK;}).Get()));
                                     } catch(...) {s->fail();}
                                     return S_OK;
                                 }).Get(),&token));
@@ -120,9 +126,11 @@ Frame BrowserSource::frame(std::int64_t) const {
     if(s->ready && !s->pending && now-s->lastCapture>=std::chrono::milliseconds(100)) {
         ComPtr<IStream> stream;check(CreateStreamOnHGlobal(nullptr,TRUE,&stream));
         s->pending=true;s->lastCapture=now;std::weak_ptr<State> weak=s;
+        auto generation=s->generation;
         auto hr=s->web->CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG,stream.Get(),
-            Callback<ICoreWebView2CapturePreviewCompletedHandler>([weak,stream](HRESULT result)->HRESULT {
+            Callback<ICoreWebView2CapturePreviewCompletedHandler>([weak,stream,generation](HRESULT result)->HRESULT {
                 auto s=weak.lock();if(!s || s->closed) return S_OK;
+                if(generation!=s->generation) {s->pending=false;return S_OK;}
                 try {check(result);s->latest=std::make_shared<Frame>(decode(stream.Get(),s->width,s->height));s->pending=false;}catch(...){s->fail();}
                 return S_OK;
             }).Get());

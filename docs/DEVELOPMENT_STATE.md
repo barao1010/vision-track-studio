@@ -251,3 +251,8 @@ SHA256 5ea526bbd728adda0da4d31219267e96460494a427e4894c4e09d9f320f4b9aa.
 Only SDK loader is linked; Edge WebView2 Runtime must be installed separately.
 Runtime redistribution/installer and third-party notice packaging remain pending.
 This does not import OBS or Streamlabs code. No final package is published.
+
+Follow-up: force browser rasterization scale1 for deterministic source dimensions
+and ignore stale CSS/capture callbacks after navigation changes. Script dialogs
+are disabled so remote pages cannot block the source host. Project version3
+roundtrip tests passed local ASan+UBSan with detect_leaks=0.
