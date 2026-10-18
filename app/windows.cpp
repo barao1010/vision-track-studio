@@ -39,6 +39,7 @@ std::vector<std::string> sceneNames;
 std::vector<CameraDevice> cameras;
 std::vector<MicrophoneDevice> microphones;
 std::wstring selectedMicrophone;
+std::vector<std::wstring> microphoneChoices;
 void populateMicrophones();
 constexpr std::array<int,5> recordingRates{24,25,30,50,60};
 int chosenRate() {auto index=SendMessage(GetDlgItem(window,RecordingRate),CB_GETCURSEL,0,0);return recordingRates.at(static_cast<std::size_t>(index));}
@@ -262,14 +263,17 @@ void refreshCameras() {
 }
 void populateMicrophones() {
     auto box=GetDlgItem(window,MicrophoneList);SendMessage(box,CB_RESETCONTENT,0,0);
+    microphoneChoices={L""};
     SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Microfone padrao do Windows"));
     int selection=0;
     for(std::size_t n=0;n<microphones.size();++n) {
         SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(microphones[n].name.c_str()));
+        microphoneChoices.push_back(microphones[n].id);
         if(microphones[n].id==selectedMicrophone) selection=static_cast<int>(n)+1;
     }
     if(!selectedMicrophone.empty() && selection==0) {
         SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Microfone salvo (indisponivel na lista)"));
+        microphoneChoices.push_back(selectedMicrophone);
         selection=static_cast<int>(microphones.size())+1;
     }
     SendMessage(box,CB_SETCURSEL,selection,0);
@@ -457,15 +461,20 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             else if(LOWORD(wp)==MicrophoneList && HIWORD(wp)==CBN_SELCHANGE) {
                 if(!recorder) {
                     auto index=SendMessage(GetDlgItem(hwnd,MicrophoneList),CB_GETCURSEL,0,0);
-                    if(index==0) selectedMicrophone.clear();
-                    else if(index>0 && static_cast<std::size_t>(index)<=microphones.size()) selectedMicrophone=microphones[index-1].id;
+                    if(index>=0 && static_cast<std::size_t>(index)<microphoneChoices.size()) selectedMicrophone=microphoneChoices[index];
                 }
             }
             else if(LOWORD(wp)==SourceList && HIWORD(wp)==LBN_SELCHANGE) loadTransform();
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
         case WM_TIMER:
             if(smoke) {
-                if(smokeStep==0) {addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(1,1,{0,0,1,1}),{"",SourceKind::solid,"",{0,0,1,1}});SendMessage(hwnd,WM_COMMAND,Fade,0);}
+                if(smokeStep==0) {
+                    selectedMicrophone=L"vision-saved-missing-device";populateMicrophones();
+                    auto micBox=GetDlgItem(hwnd,MicrophoneList);
+                    SendMessage(micBox,CB_SETCURSEL,0,0);SendMessage(hwnd,WM_COMMAND,MAKEWPARAM(MicrophoneList,CBN_SELCHANGE),reinterpret_cast<LPARAM>(micBox));verify(selectedMicrophone.empty());
+                    SendMessage(micBox,CB_SETCURSEL,microphoneChoices.size()-1,0);SendMessage(hwnd,WM_COMMAND,MAKEWPARAM(MicrophoneList,CBN_SELCHANGE),reinterpret_cast<LPARAM>(micBox));verify(selectedMicrophone==L"vision-saved-missing-device");
+                    selectedMicrophone.clear();populateMicrophones();
+                    addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(1,1,{0,0,1,1}),{"",SourceKind::solid,"",{0,0,1,1}});SendMessage(hwnd,WM_COMMAND,Fade,0);}
                 if(smokeAudio && smokeStep==40) SendMessage(GetDlgItem(hwnd,Mute),BM_SETCHECK,BST_CHECKED,0);
                 if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,SaveProject,0);auto savedState=encode_project(snapshotProject());SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());SendMessage(hwnd,WM_COMMAND,OpenProject,0);verify(encode_project(snapshotProject())==savedState);verify(program->render(now()).at(320,180).b==1);
                     auto before=encode_project(snapshotProject());std::ofstream("invalid-project.vts")<<"VISION_PROJECT 99";
