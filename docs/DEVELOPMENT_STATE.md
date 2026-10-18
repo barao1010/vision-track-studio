@@ -185,3 +185,11 @@ Camera frame selection currently uses the most recent sample, without device-clo
 latency compensation. This is not evidence of long-duration camera/audio sync.
 Added a real MF 2D-buffer test alongside contiguous buffers; no hardware required.
 Camera project contracts passed local ASan+UBSan (detect_leaks=0).
+
+Camera increment validation: a76ba92 passed all jobs in run39093151855.
+Windows passed11 contracts including native contiguous and 2D buffers and device
+enumeration; decode regressions passed native90, silentGUI28, tone/muteGUI84
+frames with unchanged criteria. Earlier bc62dbd run39093079553 also passed.
+These tests do not activate a physical camera or validate device reconnection.
+Next implement browser/CSS sources or scheduler/approved interface integration;
+streaming, extras and complete delivery remain outstanding.
