@@ -14,6 +14,9 @@ int main(int argc,char** argv) {
     p.sources.push_back({"camera",SourceKind::camera,"device-symbolic-link",{0,0,0,1}});
     SourceDefinition browser{"web",SourceKind::browser,"https://example.invalid/overlay",{0,0,0,1}};
     browser.css="body { color: white; }";p.sources.push_back(browser);
+    p.output_height=1080;
+    check(decode_project("VISION_PROJECT 5\n0 0 0 0 0 30 4000 \"\"\n0\n1\n\"Legacy\" 0\n").output_height==360);
+    auto badHeight=p;badHeight.output_height=721;rejects([&]{encode_project(badHeight);});
     p.recording_fps=25;p.video_kbps=8000;p.microphone_id="endpoint-\"saved\"";
     check(decode_project("VISION_PROJECT 4\n0 0 0 0 0 30 4000\n0\n1\n\"Legacy\" 0\n").microphone_id.empty());
     for(auto value:{std::string(32769,'x'),std::string("bad\0id",6)}) {auto invalid=p;invalid.microphone_id=value;rejects([&]{encode_project(invalid);});}

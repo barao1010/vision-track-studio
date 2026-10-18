@@ -29,7 +29,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -41,6 +41,8 @@ std::vector<MicrophoneDevice> microphones;
 std::wstring selectedMicrophone;
 std::vector<std::wstring> microphoneChoices;
 void populateMicrophones();
+constexpr std::array<int,3> outputHeights{360,720,1080};
+int chosenHeight() {auto index=SendMessage(GetDlgItem(window,OutputResolution),CB_GETCURSEL,0,0);return outputHeights.at(static_cast<std::size_t>(index));}
 constexpr std::array<int,5> recordingRates{24,25,30,50,60};
 int chosenRate() {auto index=SendMessage(GetDlgItem(window,RecordingRate),CB_GETCURSEL,0,0);return recordingRates.at(static_cast<std::size_t>(index));}
 std::map<std::shared_ptr<const VideoSource>,SourceDefinition> definitions;
@@ -82,6 +84,7 @@ void stopRecording() {
     EnableWindow(GetDlgItem(window,UseMic),TRUE);
     EnableWindow(GetDlgItem(window,RecordingRate),TRUE);
     EnableWindow(GetDlgItem(window,VideoBitrate),TRUE);
+    EnableWindow(GetDlgItem(window,OutputResolution),TRUE);
     EnableWindow(GetDlgItem(window,MicrophoneList),TRUE);
     EnableWindow(GetDlgItem(window,RefreshMicrophones),TRUE);
     SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
@@ -96,13 +99,14 @@ void startRecording(const std::filesystem::path& path) {
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const auto microphoneId=selectedMicrophone;
-    const int fps=chosenRate();
+    const int fps=chosenRate(),height=chosenHeight();
     const int kbps=field(VideoBitrate);recording_video_bps(kbps);
     auto initial=std::make_shared<Frame>(program->render(now()));
-    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps,microphoneId]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps,microphoneId);},initial,std::pow(10.f,db/20.f),muted,fps);
+    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps,microphoneId,height]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps,microphoneId,height);},initial,std::pow(10.f,db/20.f),muted,fps);
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
     EnableWindow(GetDlgItem(window,RecordingRate),FALSE);
     EnableWindow(GetDlgItem(window,VideoBitrate),FALSE);
+    EnableWindow(GetDlgItem(window,OutputResolution),FALSE);
     EnableWindow(GetDlgItem(window,MicrophoneList),FALSE);
     EnableWindow(GetDlgItem(window,RefreshMicrophones),FALSE);
     recorder=std::move(starting);
@@ -152,7 +156,7 @@ void addScene() {
     auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
 }
 Project snapshotProject() {
-    Project p;p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
+    Project p;p.output_height=chosenHeight();p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
     p.gain_db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     p.microphone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
     p.muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
@@ -216,6 +220,8 @@ void openProject(const std::filesystem::path& path) {
     for(const auto& label:labels) SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));
     SendMessage(scenesBox,LB_SETCURSEL,selected,0);
     SetWindowTextW(GetDlgItem(window,VideoBitrate),std::to_wstring(p.video_kbps).c_str());
+    auto heightIndex=std::find(outputHeights.begin(),outputHeights.end(),p.output_height)-outputHeights.begin();
+    SendMessage(GetDlgItem(window,OutputResolution),CB_SETCURSEL,heightIndex,0);
     auto rateIndex=std::find(recordingRates.begin(),recordingRates.end(),p.recording_fps)-recordingRates.begin();
     SendMessage(GetDlgItem(window,RecordingRate),CB_SETCURSEL,rateIndex,0);
     SendMessage(GetDlgItem(window,Gain),TBM_SETPOS,TRUE,p.gain_db);
@@ -412,6 +418,10 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Remover fonte",Remove,15,455,180,30);
             control(L"BUTTON",L"Diminuir",Smaller,15,490,85,30);control(L"BUTTON",L"Ampliar",Larger,105,490,90,30);
             control(L"BUTTON",L"Capturar tela",AddDesktop,15,525,180,30);
+            control(L"STATIC",L"Saida (canvas 640x360)",0,15,565,195,25);
+            auto resolution=control(L"COMBOBOX",L"",OutputResolution,15,595,180,140,CBS_DROPDOWNLIST);
+            for(int height:outputHeights) {auto label=std::to_wstring(recording_output_width(height))+L" x "+std::to_wstring(height);SendMessage(resolution,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
+            SendMessage(resolution,CB_SETCURSEL,0,0);
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
             control(L"BUTTON",L"Gravar MP4",Record,560,240,320,35);

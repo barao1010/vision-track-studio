@@ -3,6 +3,7 @@
 #include "windows_recording.hpp"
 #include "windows_microphone.hpp"
 #include "recording_rate.hpp"
+#include "video_scale.hpp"
 #include <windows.h>
 #include <mfapi.h>
 #include <cmath>
@@ -23,9 +24,12 @@ class WindowsOutput final:public OutputSink {
     int audioFrames_;
     WindowsRecorder recorder_;
     bool synthetic_;
+    int output_height_;
+    std::shared_ptr<const Frame> previous_;
+    std::unique_ptr<Frame> scaled_;
 public:
-    WindowsOutput(const std::filesystem::path& path,bool microphone,bool synthetic,int fps,int video_kbps,std::wstring microphone_id)
-        :microphone_(microphone?std::make_unique<WindowsMicrophone>(std::move(microphone_id)):nullptr),audioFrames_(recording_audio_frames(fps)),recorder_(path,640,360,fps,48000,video_kbps),synthetic_(synthetic) {}
+    WindowsOutput(const std::filesystem::path& path,bool microphone,bool synthetic,int fps,int video_kbps,std::wstring microphone_id,int output_height)
+        :microphone_(microphone?std::make_unique<WindowsMicrophone>(std::move(microphone_id)):nullptr),audioFrames_(recording_audio_frames(fps)),recorder_(path,recording_output_width(output_height),output_height,fps,48000,video_kbps),synthetic_(synthetic),output_height_(output_height) {}
     Meter write(const OutputPacket& packet) override {
         AudioBlock audio{packet.frame_number*audioFrames_,2,std::vector<float>(2*audioFrames_,0)};
         if(microphone_) {
@@ -38,12 +42,19 @@ public:
             }
         }
         auto mixed=mix(audio.start_sample,audioFrames_,2,{{&audio,packet.gain,packet.muted}});
-        recorder_.append(*packet.frame,mixed.block);return mixed.meter;
+        if(output_height_==360) recorder_.append(*packet.frame,mixed.block);
+        else {
+            if(previous_!=packet.frame) {
+                scaled_=std::make_unique<Frame>(scale_frame(*packet.frame,recording_output_width(output_height_),output_height_));previous_=packet.frame;
+            }
+            recorder_.append(*scaled_,mixed.block);
+        }
+        return mixed.meter;
     }
     void finish() override {microphone_.reset();recorder_.finish();}
 };
 }
-std::unique_ptr<OutputSink> create_windows_output(const std::filesystem::path& path,bool microphone,bool synthetic_test_audio,int fps,int video_kbps,std::wstring microphone_id) {
-    return std::make_unique<WindowsOutput>(path,microphone,synthetic_test_audio,fps,video_kbps,std::move(microphone_id));
+std::unique_ptr<OutputSink> create_windows_output(const std::filesystem::path& path,bool microphone,bool synthetic_test_audio,int fps,int video_kbps,std::wstring microphone_id,int output_height) {
+    return std::make_unique<WindowsOutput>(path,microphone,synthetic_test_audio,fps,video_kbps,std::move(microphone_id),output_height);
 }
 }

@@ -22,7 +22,7 @@ struct SavedScene { std::string name;std::vector<SavedItem> items; };
 struct Project {
     std::vector<SourceDefinition> sources;
     std::vector<SavedScene> scenes;
-    int selected_scene=0,program_scene=0,gain_db=0,recording_fps=30,video_kbps=4000;
+    int selected_scene=0,program_scene=0,gain_db=0,recording_fps=30,video_kbps=4000,output_height=360;
     bool microphone=false,muted=false;
     std::string microphone_id; // Empty follows default at recording start; otherwise exact endpoint ID.
 };

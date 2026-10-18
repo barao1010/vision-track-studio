@@ -330,3 +330,19 @@ remain hardware validation gaps. Missing saved choices have their own list-ID
 mapping (never silently become default when selected again). Project format5
 is current. Next prioritize approved UI/render scheduler, resolution/profiles,
 browser audio and streaming; extras and installer remain unimplemented.
+
+## Output resolution increment — 2026-10-18 (Windows validation pending)
+
+Recording can select640x360,1280x720 or1920x1080, persisted as output_height in
+project format6 (formats1..5 default360). Canvas remains640x360: HD selections
+UPSCALE the composed frame, not native HD detail. UI labels this limitation and
+locks resolution during recording. Original linear-light bilinear scaling uses
+premultiplied-alpha interpolation to prevent hidden transparent colors bleeding.
+Scaling is on the output worker; repeated immutable input frames reuse the last
+scaled frame. No new dependencies. This is not a GPU compositor/performance claim.
+Local scale pixel/alpha/orientation and project tests passed ASan+UBSan with
+detect_leaks=0. CI adds3-second720p/1080p native MP4 encode/decode, preserving
+existing360p regions exactly and normalizing regions for HD while keeping all
+color/audio/timestamp thresholds. All previous fixtures remain. Native canvas
+resolution/render scheduling, approved UI, browser audio, streaming, extras and
+installer remain pending.

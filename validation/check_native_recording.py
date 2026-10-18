@@ -4,6 +4,9 @@ import av
 import numpy as np
 path = sys.argv[1]
 fps = int(sys.argv[2]) if len(sys.argv)>2 else 30
+height = int(sys.argv[3]) if len(sys.argv)>3 else 360
+width = height*16//9
+assert height in (360,720,1080)
 with av.open(path) as container:
     stream = container.streams.video[0]
     assert stream.codec_context.name == 'h264'
@@ -14,9 +17,9 @@ with av.open(path) as container:
     assert abs(times[-1]-times[0]-(fps*3-1)/fps) < .002
     for frame in frames:
         pixels = frame.to_ndarray(format='rgb24')
-        assert pixels.shape == (360,640,3)
-        top = pixels[30:150,30:600].mean(axis=(0,1))
-        bottom = pixels[210:330,30:600].mean(axis=(0,1))
+        assert pixels.shape == (height,width,3)
+        top = pixels[height//12:height*5//12,width*3//64:width*15//16].mean(axis=(0,1))
+        bottom = pixels[height*7//12:height*11//12,width*3//64:width*15//16].mean(axis=(0,1))
         assert top[0]>230 and top[2]<20, ('top must be red',top)
         assert bottom[2]>230 and bottom[0]<20, ('bottom must be blue',bottom)
 with av.open(path) as container:
