@@ -13,7 +13,7 @@ using Microsoft::WRL::ComPtr;
 using Microsoft::WRL::Callback;
 namespace {
 void check(HRESULT hr) {if(FAILED(hr)) throw std::runtime_error("Browser operation failed (HRESULT "+std::to_string(static_cast<unsigned long>(hr))+")");}
-std::wstring quoted(const std::wstring& text) {
+std::wstring javascriptString(const std::wstring& text) {
     const wchar_t hex[]=L"0123456789abcdef";std::wstring out=L"\"";
     for(auto c:text) {auto n=static_cast<unsigned short>(c);out+=L"\\u";for(int shift=12;shift>=0;shift-=4) out+=hex[(n>>shift)&15];}
     return out+L"\"";
@@ -102,7 +102,7 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
                                     auto s=weak.lock();if(!s || s->closed) return S_OK;
                                     try {
                                         BOOL success=FALSE;check(args->get_IsSuccess(&success));if(!success) throw std::runtime_error("Browser navigation failed");
-                                        auto script=L"(()=>{const s=document.createElement('style');s.textContent="+quoted(s->css)+L";document.documentElement.appendChild(s);})()";
+                                        auto script=L"(()=>{const s=document.createElement('style');s.textContent="+javascriptString(s->css)+L";document.documentElement.appendChild(s);})()";
                                         auto generation=s->generation;
                                         check(s->web->ExecuteScript(script.c_str(),Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
                                             [weak,generation](HRESULT result,LPCWSTR)->HRESULT {auto s=weak.lock();if(!s || s->closed || generation!=s->generation) return S_OK;try{check(result);s->ready=true;}catch(...){s->fail();}return S_OK;}).Get()));
