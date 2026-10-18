@@ -19,6 +19,12 @@ jobs:
         if: runner.os == 'Windows'
       - run: python validation/check_native_recording.py build/native-recording.mp4
         if: runner.os == 'Windows'
+      - run: |
+          python validation/check_native_recording.py build/native-24.mp4 24
+          python validation/check_native_recording.py build/native-25.mp4 25
+          python validation/check_native_recording.py build/native-50.mp4 50
+          python validation/check_native_recording.py build/native-60.mp4 60
+        if: runner.os == 'Windows'
       - run: python validation/check_gui_recording.py build/gui-recording.mp4
         if: runner.os == 'Windows'
       - run: python validation/check_gui_recording.py build/gui-audio.mp4 --tone
@@ -28,7 +34,7 @@ jobs:
         with:
           name: windows-native-recording-validation
           path: |
-            build/native-recording.mp4
+            build/native-*.mp4
             build/gui-recording.mp4
             build/gui-audio.mp4
             build/Testing/Temporary/LastTest.log

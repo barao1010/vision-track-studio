@@ -1,5 +1,6 @@
 #include "scheduled_output.hpp"
 #include "audio_buffer.hpp"
+#include "recording_rate.hpp"
 #include <chrono>
 #include <cmath>
 #include <stdexcept>
@@ -10,8 +11,8 @@ void valid(const std::shared_ptr<const Frame>& frame,float gain) {
 }
 }
 ScheduledOutput::ScheduledOutput(std::function<std::unique_ptr<OutputSink>()> factory,
-                                 std::shared_ptr<const Frame> frame,float gain,bool muted) {
-    valid(frame,gain);if(!factory) throw std::invalid_argument("Missing output factory");
+                                 std::shared_ptr<const Frame> frame,float gain,bool muted,int fps):fps_(fps) {
+    recording_audio_frames(fps);valid(frame,gain);if(!factory) throw std::invalid_argument("Missing output factory");
     latest_={std::move(frame),0,0,gain,muted};
     worker_=std::thread([this,factory=std::move(factory)]() mutable {run(std::move(factory));});
     std::unique_lock lock(mutex_);changed_.wait(lock,[this]{return ready_;});
@@ -40,7 +41,7 @@ void ScheduledOutput::run(std::function<std::unique_ptr<OutputSink>()> factory) 
         const auto audioStart=audio_sample_time(std::chrono::duration_cast<std::chrono::nanoseconds>(start.time_since_epoch()).count());
         for(std::int64_t index=0;;++index) {
             // Split quotient/remainder avoids multiplication overflow in long sessions.
-            const auto deadline=start+std::chrono::seconds(index/30)+std::chrono::nanoseconds((index%30)*1000000000/30);
+            const auto deadline=start+std::chrono::seconds(index/fps_)+std::chrono::nanoseconds((index%fps_)*1000000000/fps_);
             OutputPacket packet;
             {
                 std::unique_lock lock(mutex_);
@@ -49,7 +50,7 @@ void ScheduledOutput::run(std::function<std::unique_ptr<OutputSink>()> factory) 
                 if(Clock::now()-deadline>std::chrono::seconds(10)) throw std::runtime_error("Recording stopped: encoder more than ten seconds behind");
                 packet=latest_;
             }
-            packet.frame_number=index;packet.audio_start=audioStart+index*1600;
+            packet.frame_number=index;packet.audio_start=audioStart+index*recording_audio_frames(fps_);
             auto meter=sink->write(packet);
             {std::lock_guard lock(mutex_);meter_=meter;ready_=true;}
             changed_.notify_all();

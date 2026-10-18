@@ -211,3 +211,14 @@ verify held frames without producer updates, contiguous frame/audio positions,
 latest gain/mute, thread affinity, shutdown and initialization failure. Local
 warning-clean and ASan+UBSan passed (detect_leaks=0). Windows decode regressions
 must pass unchanged. Browser/CSS, approved interface, streaming and extras remain.
+
+Output clock6b9acfe passed all jobs in run39096838929, including Windows decode
+regressions. Added selectable recording24/25/30/50/60fps, fixed48kHz audio blocks
+matched to each rate, and project format2 with backward reading of format1
+(default30fps). The recording rate control is disabled during recording. Canvas
+remains640x360 and UI composition remains approximately30Hz: 50/60fps output
+can contain held pictures, not50/60 distinct captured images. Fractional frame
+rates and full output profiles remain unimplemented.
+Rate tests verify scheduled audio intervals for all5 rates. Native Windows output
+fixtures now encode/decode3 seconds at each rate with the same orientation,
+color, timestamp and audio criteria as the existing30fps test. Validation pending.

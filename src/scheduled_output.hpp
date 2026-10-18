@@ -7,7 +7,7 @@ namespace vision {
 class ScheduledOutput {
 public:
     ScheduledOutput(std::function<std::unique_ptr<OutputSink>()> factory,
-                    std::shared_ptr<const Frame> initial,float gain=1,bool muted=false);
+                    std::shared_ptr<const Frame> initial,float gain=1,bool muted=false,int fps=30);
     ~ScheduledOutput();
     ScheduledOutput(const ScheduledOutput&)=delete;
     ScheduledOutput& operator=(const ScheduledOutput&)=delete;
@@ -20,6 +20,7 @@ private:
     std::condition_variable changed_;
     std::thread worker_;
     OutputPacket latest_;
+    int fps_=30;
     Meter meter_;
     bool ready_=false,closing_=false;
     std::exception_ptr error_;

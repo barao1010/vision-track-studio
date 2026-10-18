@@ -1,4 +1,5 @@
 #include "project.hpp"
+#include "recording_rate.hpp"
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -25,6 +26,7 @@ struct Temporary {
 };
 }
 void validate_project(const Project& p) {
+    recording_audio_frames(p.recording_fps);
     require(p.sources.size()<=1000 && !p.scenes.empty() && p.scenes.size()<=100);
     require(p.selected_scene>=0 && static_cast<std::size_t>(p.selected_scene)<p.scenes.size());
     require(p.program_scene>=0 && static_cast<std::size_t>(p.program_scene)<p.scenes.size());
@@ -52,7 +54,7 @@ void validate_project(const Project& p) {
 }
 std::string encode_project(const Project& p) {
     validate_project(p);std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(std::numeric_limits<float>::max_digits10);
-    out<<"VISION_PROJECT 1\n"<<p.selected_scene<<' '<<p.program_scene<<' '<<p.gain_db<<' '<<p.microphone<<' '<<p.muted<<'\n'<<p.sources.size()<<'\n';
+    out<<"VISION_PROJECT 2\n"<<p.selected_scene<<' '<<p.program_scene<<' '<<p.gain_db<<' '<<p.microphone<<' '<<p.muted<<' '<<p.recording_fps<<'\n'<<p.sources.size()<<'\n';
     for(const auto& s:p.sources) out<<std::quoted(s.id)<<' '<<static_cast<int>(s.kind)<<' '<<std::quoted(s.path)<<' '<<s.color.r<<' '<<s.color.g<<' '<<s.color.b<<' '<<s.color.a<<'\n';
     out<<p.scenes.size()<<'\n';
     for(const auto& scene:p.scenes) {
@@ -63,8 +65,9 @@ std::string encode_project(const Project& p) {
 }
 Project decode_project(const std::string& text) {
     require(text.size()<=max_bytes);std::istringstream in(text);in.imbue(std::locale::classic());
-    std::string magic;int version=0;require(bool(in>>magic>>version) && magic=="VISION_PROJECT" && version==1);
+    std::string magic;int version=0;require(bool(in>>magic>>version) && magic=="VISION_PROJECT" && (version==1 || version==2));
     Project p;require(bool(in>>p.selected_scene>>p.program_scene>>p.gain_db>>p.microphone>>p.muted));
+    if(version==2) require(bool(in>>p.recording_fps));
     auto sources=count(in,1000);
     for(std::size_t n=0;n<sources;++n) {
         SourceDefinition s;int kind=0;require(bool(in>>std::quoted(s.id)>>kind>>std::quoted(s.path)>>s.color.r>>s.color.g>>s.color.b>>s.color.a));

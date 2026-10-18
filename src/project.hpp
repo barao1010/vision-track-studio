@@ -20,7 +20,7 @@ struct SavedScene { std::string name;std::vector<SavedItem> items; };
 struct Project {
     std::vector<SourceDefinition> sources;
     std::vector<SavedScene> scenes;
-    int selected_scene=0,program_scene=0,gain_db=0;
+    int selected_scene=0,program_scene=0,gain_db=0,recording_fps=30;
     bool microphone=false,muted=false;
 };
 void validate_project(const Project& project);

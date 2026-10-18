@@ -3,14 +3,15 @@ import sys
 import av
 import numpy as np
 path = sys.argv[1]
+fps = int(sys.argv[2]) if len(sys.argv)>2 else 30
 with av.open(path) as container:
     stream = container.streams.video[0]
     assert stream.codec_context.name == 'h264'
     frames = list(container.decode(video=0))
-    assert len(frames) == 90, len(frames)
+    assert len(frames) == fps*3, len(frames)
     times = [float(f.pts*f.time_base) for f in frames]
     assert all(b>a for a,b in zip(times,times[1:]))
-    assert abs(times[-1]-times[0]-89/30) < .002
+    assert abs(times[-1]-times[0]-(fps*3-1)/fps) < .002
     for frame in frames:
         pixels = frame.to_ndarray(format='rgb24')
         assert pixels.shape == (360,640,3)
@@ -32,4 +33,4 @@ with av.open(path) as container:
     for channel in stable:
         hz=np.fft.rfftfreq(len(channel),1/48000)[np.argmax(abs(np.fft.rfft(channel*np.hanning(len(channel)))))]
         assert abs(hz-440)<=1,hz
-print('PASS: native MP4 H.264/AAC, 90 frames, orientation/colors, timestamps and stereo 440Hz level')
+print(f'PASS: native MP4 H.264/AAC, {fps*3} frames at {fps}fps, orientation/colors, timestamps and stereo 440Hz level')

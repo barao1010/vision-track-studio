@@ -12,10 +12,13 @@ int main(int argc,char** argv) {
     p.sources={{"red",SourceKind::solid,"",{1,0,0,1}},{"logo",SourceKind::image,"images/quoted \"logo\".png",{0,0,0,1}},{"screen",SourceKind::desktop,"",{0,0,0,1}}};
     p.scenes={{"Scene one",{{"layer","red",-30,24,640,360,{1,2,3,4},.37f,false}}},{"Scene two",{{"shared","red",0,0,1,1,{},1,true}}}};
     p.sources.push_back({"camera",SourceKind::camera,"device-symbolic-link",{0,0,0,1}});
+    p.recording_fps=25;
+    check(decode_project("VISION_PROJECT 1\n0 0 0 0 0\n0\n1\n\"Legacy\" 0\n").recording_fps==30);
     p.selected_scene=1;p.gain_db=6;p.microphone=true;
     auto text=encode_project(p);auto roundtrip=decode_project(text);check(encode_project(roundtrip)==text);
     auto file=base/"project.vts";save_project(file,p);check(encode_project(load_project(file))==text);
     p.muted=true;save_project(file,p);check(load_project(file).muted);
+    auto invalidRate=p;invalidRate.recording_fps=29;rejects([&]{encode_project(invalidRate);});
     auto bad=p;bad.sources.push_back(bad.sources[0]);rejects([&]{save_project(file,bad);});check(load_project(file).muted);
     bad=p;bad.scenes[0].items[0].source="missing";rejects([&]{encode_project(bad);});
     bad=p;bad.scenes[0].items[0].opacity=std::numeric_limits<float>::quiet_NaN();rejects([&]{encode_project(bad);});
