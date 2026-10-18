@@ -16,6 +16,7 @@
 #include "windows_camera.hpp"
 #include "windows_browser.hpp"
 #include "windows_output.hpp"
+#include "windows_microphone.hpp"
 #include "recording_rate.hpp"
 #include "audio_buffer.hpp"
 #include "scheduled_output.hpp"
@@ -28,7 +29,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -36,6 +37,9 @@ std::unique_ptr<Switcher> program;
 int selected=0,serial=0,programScene=0;
 std::vector<std::string> sceneNames;
 std::vector<CameraDevice> cameras;
+std::vector<MicrophoneDevice> microphones;
+std::wstring selectedMicrophone;
+void populateMicrophones();
 constexpr std::array<int,5> recordingRates{24,25,30,50,60};
 int chosenRate() {auto index=SendMessage(GetDlgItem(window,RecordingRate),CB_GETCURSEL,0,0);return recordingRates.at(static_cast<std::size_t>(index));}
 std::map<std::shared_ptr<const VideoSource>,SourceDefinition> definitions;
@@ -77,6 +81,8 @@ void stopRecording() {
     EnableWindow(GetDlgItem(window,UseMic),TRUE);
     EnableWindow(GetDlgItem(window,RecordingRate),TRUE);
     EnableWindow(GetDlgItem(window,VideoBitrate),TRUE);
+    EnableWindow(GetDlgItem(window,MicrophoneList),TRUE);
+    EnableWindow(GetDlgItem(window,RefreshMicrophones),TRUE);
     SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
     finishing->finish();
 }
@@ -88,13 +94,16 @@ void startRecording(const std::filesystem::path& path) {
     const bool testAudio=smokeAudio;
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
+    const auto microphoneId=selectedMicrophone;
     const int fps=chosenRate();
     const int kbps=field(VideoBitrate);recording_video_bps(kbps);
     auto initial=std::make_shared<Frame>(program->render(now()));
-    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps);},initial,std::pow(10.f,db/20.f),muted,fps);
+    auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps,microphoneId]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps,microphoneId);},initial,std::pow(10.f,db/20.f),muted,fps);
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
     EnableWindow(GetDlgItem(window,RecordingRate),FALSE);
     EnableWindow(GetDlgItem(window,VideoBitrate),FALSE);
+    EnableWindow(GetDlgItem(window,MicrophoneList),FALSE);
+    EnableWindow(GetDlgItem(window,RefreshMicrophones),FALSE);
     recorder=std::move(starting);
     SetWindowText(GetDlgItem(window,Record),useMicrophone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
@@ -142,7 +151,7 @@ void addScene() {
     auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
 }
 Project snapshotProject() {
-    Project p;p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
+    Project p;p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
     p.gain_db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     p.microphone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
     p.muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
@@ -196,8 +205,10 @@ void openProject(const std::filesystem::path& path) {
         labels.push_back(wide(saved.name));names.push_back(saved.name);
         candidateScenes.push_back(std::move(scene));candidateIds.push_back(std::move(keys));
     }
+    auto candidateMicrophone=wide(p.microphone_id);
     auto candidateProgram=std::make_unique<Switcher>(640,360,candidateScenes.at(p.program_scene));
     // All decoding and source validation precede replacement of the active project.
+    selectedMicrophone=std::move(candidateMicrophone);populateMicrophones();
     scenes=std::move(candidateScenes);ids=std::move(candidateIds);definitions=std::move(candidateDefinitions);
     sceneNames=std::move(names);program=std::move(candidateProgram);selected=p.selected_scene;programScene=p.program_scene;
     SendMessage(scenesBox,LB_RESETCONTENT,0,0);
@@ -249,7 +260,25 @@ void refreshCameras() {
     for(const auto& device:cameras) SendMessage(list,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(device.name.c_str()));
     if(!cameras.empty()) SendMessage(list,CB_SETCURSEL,0,0);
 }
+void populateMicrophones() {
+    auto box=GetDlgItem(window,MicrophoneList);SendMessage(box,CB_RESETCONTENT,0,0);
+    SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Microfone padrao do Windows"));
+    int selection=0;
+    for(std::size_t n=0;n<microphones.size();++n) {
+        SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(microphones[n].name.c_str()));
+        if(microphones[n].id==selectedMicrophone) selection=static_cast<int>(n)+1;
+    }
+    if(!selectedMicrophone.empty() && selection==0) {
+        SendMessage(box,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Microfone salvo (indisponivel na lista)"));
+        selection=static_cast<int>(microphones.size())+1;
+    }
+    SendMessage(box,CB_SETCURSEL,selection,0);
+}
 void command(int id) {
+    if(id==RefreshMicrophones) {
+        if(recorder) throw std::runtime_error("Stop recording before refreshing microphones");
+        microphones=microphone_devices();populateMicrophones();return;
+    }
     if(id==UseMic || id==Mute) return;
     if(id==ApplyBrowserCss || id==ReloadBrowser) {
         auto* item=selectedItem();
@@ -383,8 +412,10 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
             control(L"BUTTON",L"Gravar MP4",Record,560,240,320,35);
             control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera: selecione o dispositivo abaixo. Transmissao pendente. Sem microfone se a caixa estiver desmarcada.",0,220,300,660,50);
-            control(L"BUTTON",L"Gravar microfone padrao",UseMic,220,360,260,30,BS_AUTOCHECKBOX);
+            control(L"BUTTON",L"Gravar microfone selecionado",UseMic,220,360,260,30,BS_AUTOCHECKBOX);
             control(L"BUTTON",L"Silenciar audio",Mute,500,360,240,30,BS_AUTOCHECKBOX);
+            control(L"COMBOBOX",L"",MicrophoneList,540,399,260,180,CBS_DROPDOWNLIST|WS_VSCROLL);
+            control(L"BUTTON",L"Atualizar",RefreshMicrophones,805,399,75,28);populateMicrophones();
             control(L"STATIC",L"Ganho do microfone (-60 a +12 dB)",0,220,405,300,25);
             auto gainSlider=control(TRACKBAR_CLASS,L"",Gain,220,435,300,30,TBS_AUTOTICKS);
             SendMessage(gainSlider,TBM_SETRANGE,TRUE,MAKELPARAM(-60,12));
@@ -423,6 +454,13 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
+            else if(LOWORD(wp)==MicrophoneList && HIWORD(wp)==CBN_SELCHANGE) {
+                if(!recorder) {
+                    auto index=SendMessage(GetDlgItem(hwnd,MicrophoneList),CB_GETCURSEL,0,0);
+                    if(index==0) selectedMicrophone.clear();
+                    else if(index>0 && static_cast<std::size_t>(index)<=microphones.size()) selectedMicrophone=microphones[index-1].id;
+                }
+            }
             else if(LOWORD(wp)==SourceList && HIWORD(wp)==LBN_SELCHANGE) loadTransform();
             else if(HIWORD(wp)==BN_CLICKED) command(LOWORD(wp));return 0;
         case WM_TIMER:

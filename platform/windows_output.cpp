@@ -24,8 +24,8 @@ class WindowsOutput final:public OutputSink {
     WindowsRecorder recorder_;
     bool synthetic_;
 public:
-    WindowsOutput(const std::filesystem::path& path,bool microphone,bool synthetic,int fps,int video_kbps)
-        :microphone_(microphone?std::make_unique<WindowsMicrophone>():nullptr),audioFrames_(recording_audio_frames(fps)),recorder_(path,640,360,fps,48000,video_kbps),synthetic_(synthetic) {}
+    WindowsOutput(const std::filesystem::path& path,bool microphone,bool synthetic,int fps,int video_kbps,std::wstring microphone_id)
+        :microphone_(microphone?std::make_unique<WindowsMicrophone>(std::move(microphone_id)):nullptr),audioFrames_(recording_audio_frames(fps)),recorder_(path,640,360,fps,48000,video_kbps),synthetic_(synthetic) {}
     Meter write(const OutputPacket& packet) override {
         AudioBlock audio{packet.frame_number*audioFrames_,2,std::vector<float>(2*audioFrames_,0)};
         if(microphone_) {
@@ -43,7 +43,7 @@ public:
     void finish() override {microphone_.reset();recorder_.finish();}
 };
 }
-std::unique_ptr<OutputSink> create_windows_output(const std::filesystem::path& path,bool microphone,bool synthetic_test_audio,int fps,int video_kbps) {
-    return std::make_unique<WindowsOutput>(path,microphone,synthetic_test_audio,fps,video_kbps);
+std::unique_ptr<OutputSink> create_windows_output(const std::filesystem::path& path,bool microphone,bool synthetic_test_audio,int fps,int video_kbps,std::wstring microphone_id) {
+    return std::make_unique<WindowsOutput>(path,microphone,synthetic_test_audio,fps,video_kbps,std::move(microphone_id));
 }
 }

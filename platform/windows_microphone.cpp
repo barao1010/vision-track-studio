@@ -6,6 +6,7 @@
 #include <audioclient.h>
 #include <mmdeviceapi.h>
 #include <mmreg.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <limits>
 #include <wrl/client.h>
 #include <chrono>
@@ -39,7 +40,26 @@ std::int64_t packetTime(UINT64 qpc100ns) {
     return ns-age;
 }
 }
+std::vector<MicrophoneDevice> microphone_devices() {
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    checked(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_ALL,IID_PPV_ARGS(&enumerator)),"Enumerate microphones");
+    ComPtr<IMMDeviceCollection> collection;
+    checked(enumerator->EnumAudioEndpoints(eCapture,DEVICE_STATE_ACTIVE,&collection),"List capture endpoints");
+    UINT count=0;checked(collection->GetCount(&count),"Count microphones");
+    std::vector<MicrophoneDevice> devices;
+    for(UINT i=0;i<count;++i) {
+        ComPtr<IMMDevice> device;checked(collection->Item(i,&device),"Read capture endpoint");
+        LPWSTR raw=nullptr;checked(device->GetId(&raw),"Read endpoint identity");
+        std::unique_ptr<wchar_t,decltype(&CoTaskMemFree)> id(raw,CoTaskMemFree);
+        ComPtr<IPropertyStore> properties;checked(device->OpenPropertyStore(STGM_READ,&properties),"Read microphone properties");
+        struct Property {PROPVARIANT value{};~Property(){PropVariantClear(&value);}} name;
+        checked(properties->GetValue(PKEY_Device_FriendlyName,&name.value),"Read microphone name");
+        devices.push_back({id.get(),name.value.vt==VT_LPWSTR && name.value.pwszVal?name.value.pwszVal:id.get()});
+    }
+    return devices;
+}
 struct WindowsMicrophone::State {
+    std::wstring endpoint_id;
     Event stop;
     std::thread worker;
     std::mutex mutex;
@@ -52,7 +72,13 @@ struct WindowsMicrophone::State {
             ComScope com;
             ComPtr<IMMDeviceEnumerator> enumerator;
             checked(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_ALL,IID_PPV_ARGS(&enumerator)),"Enumerate microphones");
-            ComPtr<IMMDevice> device;checked(enumerator->GetDefaultAudioEndpoint(eCapture,eConsole,&device),"Open default microphone");
+            ComPtr<IMMDevice> device;
+            if(endpoint_id.empty()) checked(enumerator->GetDefaultAudioEndpoint(eCapture,eConsole,&device),"Open default microphone");
+            else checked(enumerator->GetDevice(endpoint_id.c_str(),&device),"Open selected microphone (no fallback)");
+            ComPtr<IMMEndpoint> endpoint;checked(device.As(&endpoint),"Read endpoint type");
+            EDataFlow flow=eAll;checked(endpoint->GetDataFlow(&flow),"Check capture endpoint");
+            DWORD status=0;checked(device->GetState(&status),"Check microphone state");
+            if(flow!=eCapture || status!=DEVICE_STATE_ACTIVE) throw std::runtime_error("Selected microphone is not an active capture endpoint");
             ComPtr<IAudioClient> client;checked(device->Activate(__uuidof(IAudioClient),CLSCTX_ALL,nullptr,reinterpret_cast<void**>(client.GetAddressOf())),"Activate microphone");
             WAVEFORMATEX* native=nullptr;checked(client->GetMixFormat(&native),"Read microphone format");
             const auto rate=native->nSamplesPerSec;const auto channels=native->nChannels;CoTaskMemFree(native);
@@ -104,7 +130,9 @@ struct WindowsMicrophone::State {
         }
     }
 };
-WindowsMicrophone::WindowsMicrophone():state_(std::make_unique<State>()) {
+WindowsMicrophone::WindowsMicrophone(std::wstring endpoint_id):state_(std::make_unique<State>()) {
+    if(endpoint_id.size()>32768 || endpoint_id.find(L'\0')!=std::wstring::npos) throw std::invalid_argument("Invalid microphone endpoint identity");
+    state_->endpoint_id=std::move(endpoint_id);
     std::promise<void> started;auto future=started.get_future();
     state_->worker=std::thread([s=state_.get(),promise=std::move(started)]() mutable {s->run(std::move(promise));});
     try {future.get();}catch(...) {state_->worker.join();throw;}

@@ -24,6 +24,7 @@ struct Project {
     std::vector<SavedScene> scenes;
     int selected_scene=0,program_scene=0,gain_db=0,recording_fps=30,video_kbps=4000;
     bool microphone=false,muted=false;
+    std::string microphone_id; // Empty follows default at recording start; otherwise exact endpoint ID.
 };
 void validate_project(const Project& project);
 std::string encode_project(const Project& project);

@@ -1,12 +1,17 @@
 #pragma once
 #include "core.hpp"
 #include <memory>
+#include <string>
+#include <vector>
 namespace vision {
-// Captures the default Windows microphone on an owned COM worker. Device loss
+struct MicrophoneDevice {std::wstring id,name;};
+// Requires COM initialized; enumeration does not activate capture.
+std::vector<MicrophoneDevice> microphone_devices();
+// Captures a selected Windows microphone on an owned COM worker. Device loss
 // is surfaced as an error; it never silently changes the selected device.
 class WindowsMicrophone {
 public:
-    WindowsMicrophone();
+    explicit WindowsMicrophone(std::wstring endpoint_id=L"");
     ~WindowsMicrophone();
     WindowsMicrophone(const WindowsMicrophone&)=delete;
     WindowsMicrophone& operator=(const WindowsMicrophone&)=delete;

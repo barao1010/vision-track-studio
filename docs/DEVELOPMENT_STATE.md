@@ -302,3 +302,21 @@ format3 defaults, boundary500/50000 and invalid settings passed ASan+UBSan
 (detect_leaks=0). Actual bitrate under complex scenes/performance is not measured.
 Next prioritize approved UI and rendering outside UI; resolution/profile support,
 browser audio, streaming, extras and installer remain incomplete.
+
+## Explicit microphone selection — 2026-10-18 (Windows validation pending)
+
+Original WASAPI adapter now enumerates active capture endpoints without activating
+them, displays friendly names and opens the selected opaque endpoint ID on its
+worker. Missing/inactive/non-capture endpoints fail without default fallback.
+Empty ID preserves the explicitly labeled Windows-default choice at start.
+Selection and refresh are locked while recording. Refresh preserves a missing
+saved selection as unavailable rather than silently choosing another device.
+Project format5 persists microphone_id and reads formats1..4 with default choice.
+UI enumeration is manual; no physical microphone is opened on application start.
+Local project tests passed ASan+UBSan detect_leaks=0, including quoted IDs,
+legacy defaults and invalid IDs. Windows test enumerates endpoints and verifies
+a nonexistent explicit ID fails; it does not activate physical capture.
+Real capture/disconnect/recovery and long-duration sync remain unvalidated.
+No new dependencies; APIs verified against Microsoft Core Audio device-properties
+and IMMDeviceEnumerator::GetDevice documentation. Approved UI and other pending
+features remain incomplete; no package delivery.
