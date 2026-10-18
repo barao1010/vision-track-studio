@@ -320,3 +320,13 @@ Real capture/disconnect/recovery and long-duration sync remain unvalidated.
 No new dependencies; APIs verified against Microsoft Core Audio device-properties
 and IMMDeviceEnumerator::GetDevice documentation. Approved UI and other pending
 features remain incomplete; no package delivery.
+
+Microphone selection validation: c34a8fb run39153500638 passed all3 jobs and19
+Windows contracts. Enumeration and nonexistent-ID no-fallback test passed; GUI
+checks switching default→saved-missing preserves identity. Existing native
+multirate/custom-bitrate decodes and GUI29silent/85tone-mute passed unchanged.
+No physical microphone was activated by these tests, so capture/reconnect/sync
+remain hardware validation gaps. Missing saved choices have their own list-ID
+mapping (never silently become default when selected again). Project format5
+is current. Next prioritize approved UI/render scheduler, resolution/profiles,
+browser audio and streaming; extras and installer remain unimplemented.
