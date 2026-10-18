@@ -27,7 +27,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -42,6 +42,7 @@ std::string utf8(const std::filesystem::path& path) {
     auto s=path.u8string();return {reinterpret_cast<const char*>(s.data()),s.size()};
 }
 std::wstring wide(const std::string& text) {
+    if(text.empty()) return {};
     int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),nullptr,0);
     if(n<=0) throw std::runtime_error("Invalid UTF-8 project name");
     std::wstring out(n,L' ');MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,text.data(),static_cast<int>(text.size()),out.data(),n);return out;
@@ -213,6 +214,13 @@ void loadTransform() {
         auto value=item?std::to_wstring(values[n]):L"";SetWindowText(edit,value.c_str());
     }
     EnableWindow(GetDlgItem(window,ApplyTransform),item!=nullptr);
+    if(item) {
+        auto found=definitions.find(item->source);
+        if(found!=definitions.end() && found->second.kind==SourceKind::browser) {
+            SetWindowTextW(GetDlgItem(window,BrowserUrl),wide(found->second.path).c_str());
+            SetWindowTextW(GetDlgItem(window,BrowserCss),wide(found->second.css).c_str());
+        }
+    }
 }
 int field(int id) {
     auto edit=GetDlgItem(window,id);int length=GetWindowTextLengthA(edit);
@@ -237,6 +245,19 @@ void refreshCameras() {
 }
 void command(int id) {
     if(id==UseMic || id==Mute) return;
+    if(id==ApplyBrowserCss || id==ReloadBrowser) {
+        auto* item=selectedItem();
+        auto source=item?std::dynamic_pointer_cast<const BrowserSource>(item->source):nullptr;
+        if(!source) throw std::runtime_error("Select a browser source");
+        if(id==ReloadBrowser) source->reload();
+        else {
+            auto handle=GetDlgItem(window,BrowserCss);int n=GetWindowTextLengthW(handle);
+            std::wstring css(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,css.data(),n+1);css.resize(n);
+            auto encoded=utf8(std::filesystem::path(css));source->set_css(std::move(css));
+            definitions.at(item->source).css=std::move(encoded);
+        }
+        SetTimer(window,1,33,nullptr);return;
+    }
     if(id==AddBrowser) {
         auto read=[](int control) {auto handle=GetDlgItem(window,control);int n=GetWindowTextLengthW(handle);std::wstring text(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,text.data(),n+1);text.resize(n);return text;};
         auto url=read(BrowserUrl),css=read(BrowserCss);
@@ -389,6 +410,8 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"STATIC",L"CSS personalizado (fonte visual; audio pendente)",0,220,802,650,20);
             auto css=control(L"EDIT",L"html,body { background: transparent !important; margin: 0; }",BrowserCss,220,824,660,65,WS_BORDER|ES_MULTILINE|ES_AUTOVSCROLL|WS_VSCROLL);
             SendMessage(css,EM_SETLIMITTEXT,65536,0);
+            control(L"BUTTON",L"Aplicar CSS selecionado",ApplyBrowserCss,15,810,195,30);
+            control(L"BUTTON",L"Recarregar navegador",ReloadBrowser,15,850,195,30);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}

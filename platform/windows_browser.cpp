@@ -102,10 +102,7 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
                                     auto s=weak.lock();if(!s || s->closed) return S_OK;
                                     try {
                                         BOOL success=FALSE;check(args->get_IsSuccess(&success));if(!success) throw std::runtime_error("Browser navigation failed");
-                                        auto script=L"(()=>{const s=document.createElement('style');s.textContent="+javascriptString(s->css)+L";document.documentElement.appendChild(s);})()";
-                                        auto generation=s->generation;
-                                        check(s->web->ExecuteScript(script.c_str(),Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-                                            [weak,generation](HRESULT result,LPCWSTR)->HRESULT {auto s=weak.lock();if(!s || s->closed || generation!=s->generation) return S_OK;try{check(result);s->ready=true;}catch(...){s->fail();}return S_OK;}).Get()));
+                                        apply_css(s);
                                     } catch(...) {s->fail();}
                                     return S_OK;
                                 }).Get(),&token));
@@ -116,6 +113,30 @@ BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int hei
             } catch(...) {s->fail();}
             return S_OK;
         }).Get()));
+}
+void BrowserSource::apply_css(const std::shared_ptr<State>& s) {
+    s->ready=false;s->latest.reset();auto generation=++s->generation;
+    std::weak_ptr<State> weak=s;
+    auto script=L"(()=>{let s=document.getElementById('__vision_custom_css');if(!s){s=document.createElement('style');s.id='__vision_custom_css';document.documentElement.appendChild(s);}s.textContent="+javascriptString(s->css)+L";})()";
+    check(s->web->ExecuteScript(script.c_str(),Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+        [weak,generation](HRESULT result,LPCWSTR)->HRESULT {
+            auto s=weak.lock();if(!s || s->closed || generation!=s->generation) return S_OK;
+            try {check(result);s->ready=true;}catch(...){s->fail();}return S_OK;
+        }).Get()));
+}
+void BrowserSource::set_css(std::wstring css) const {
+    if(css.size()>65536) throw std::invalid_argument("Browser CSS is too large");
+    auto s=state_;if(s->error) std::rethrow_exception(s->error);
+    if(!s->ready) throw std::runtime_error("Wait for the browser to finish loading before editing CSS");
+    s->css=std::move(css);s->started=std::chrono::steady_clock::now();apply_css(s);
+}
+void BrowserSource::reload() const {
+    auto s=state_;if(!s->web) throw std::runtime_error("Browser is still initializing");
+    if(!s->ready && !s->error) throw std::runtime_error("Browser is already loading");
+    // Invalidate captures before navigation starts; never publish the old page after reload.
+    s->ready=false;s->latest.reset();s->error=nullptr;++s->generation;
+    s->started=std::chrono::steady_clock::now();
+    if(s->html.empty()) check(s->web->Navigate(s->url.c_str()));else check(s->web->NavigateToString(s->html.c_str()));
 }
 BrowserSource::~BrowserSource() {state_->close();}
 Frame BrowserSource::frame(std::int64_t) const {

@@ -256,3 +256,19 @@ Follow-up: force browser rasterization scale1 for deterministic source dimension
 and ignore stale CSS/capture callbacks after navigation changes. Script dialogs
 are disabled so remote pages cannot block the source host. Project version3
 roundtrip tests passed local ASan+UBSan with detect_leaks=0.
+
+Browser c0c17f9 validated in run39115241344: all3 jobs passed,17 Windows
+contracts including actual CSS/transparency pixels. Native recordings decoded
+90/72/75/150/180frames and GUI28silent/86tone-mute with unchanged thresholds.
+No browser audio, high-frame-rate browser performance or hardware parity implied.
+
+Browser editing increment: selected source loads URL/CSS into fields; Apply CSS
+replaces a dedicated style element on the existing page without creating another
+browser instance. Reload reopens the same URL/test HTML and reapplies saved CSS.
+Frames from before the operation are invalidated, including in-flight captures.
+CSS size is checked before mutation; edits wait for navigation to complete.
+Project snapshots retain edited CSS. Tests now require red-to-green CSS update,
+transparent background, no stale frame immediately after edit/reload, and green
+again after reload. Each of three phases retains25s deadline (overall test90s).
+Windows validation pending. URL editing of existing sources remains pending;
+current controls remain engineering UI, not the approved final interface.
