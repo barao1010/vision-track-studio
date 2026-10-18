@@ -272,3 +272,10 @@ transparent background, no stale frame immediately after edit/reload, and green
 again after reload. Each of three phases retains25s deadline (overall test90s).
 Windows validation pending. URL editing of existing sources remains pending;
 current controls remain engineering UI, not the approved final interface.
+
+Editing validation completed:32d8477 run39132144181 passed all3 jobs and all17
+Windows contracts. Browser pixels/edit/reload passed in6.65s. Native multirate
+decodes passed unchanged; GUI29silent/85tone-mute. No hardware validation,
+browser audio or full-functionality equivalence is implied. Next prioritize
+approved UI integration and browser/audio lifecycle; remaining streaming,
+profiles, extras and installer must still be implemented before delivery.
