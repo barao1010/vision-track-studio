@@ -2,7 +2,7 @@
 #include "core.hpp"
 #include <filesystem>
 namespace vision {
-enum class SourceKind { image=0, desktop=1, solid=2 };
+enum class SourceKind { image=0, desktop=1, solid=2, camera=3 };
 struct SourceDefinition {
     std::string id;
     SourceKind kind=SourceKind::solid;

@@ -29,11 +29,12 @@ void validate_project(const Project& p) {
     require(p.selected_scene>=0 && static_cast<std::size_t>(p.selected_scene)<p.scenes.size());
     require(p.program_scene>=0 && static_cast<std::size_t>(p.program_scene)<p.scenes.size());
     require(p.gain_db>=-60 && p.gain_db<=12);
-    std::set<std::string> sources;
+    std::set<std::string> sources,cameras;
     for(const auto& s:p.sources) {
         string_ok(s.id,128);string_ok(s.path,32768,true);require(sources.insert(s.id).second);
-        require(s.kind==SourceKind::image || s.kind==SourceKind::desktop || s.kind==SourceKind::solid);
-        require(s.kind!=SourceKind::image || !s.path.empty());
+        require(s.kind==SourceKind::image || s.kind==SourceKind::desktop || s.kind==SourceKind::solid || s.kind==SourceKind::camera);
+        require((s.kind!=SourceKind::image && s.kind!=SourceKind::camera) || !s.path.empty());
+        if(s.kind==SourceKind::camera) require(cameras.insert(s.path).second);
         require(unit(s.color.r) && unit(s.color.g) && unit(s.color.b) && unit(s.color.a));
     }
     std::size_t total=0;

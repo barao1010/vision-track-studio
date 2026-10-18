@@ -155,3 +155,28 @@ passed unchanged criteria: native90 frames, silentGUI29, tone/muteGUI84.
 This is incremental validation; all remaining feature/delivery limitations above
 still apply. Next work should implement camera/device capture or browser sources,
 not repackage this engineering window.
+
+## Camera capture increment — 2026-10-18 (validation pending)
+
+Original Windows Media Foundation asynchronous source-reader adapter added.
+Enumerates names and persistent symbolic links; chooses a native mode near
+640x360/30 within 1920x1080 CPU limits, requests RGB32, converts padded or negative
+stride buffers into linear opaque pixels on MF callbacks. Only one read is pending
+per source; UI reads the latest frame and never waits for a capture sample.
+Startup/shutdown and manual reconnect still happen synchronously. Device failures,
+format changes and 5-second stalls are explicit errors. Reconnect releases and
+reopens only the selected symbolic link; it never substitutes a different camera.
+The initial frame is transparent pending capture, not a fake feed.
+
+Engineering controls refresh/select/add/reconnect camera sources. Multiple scene
+items share an existing camera instance, including on project reopening, avoiding
+a second acquisition of the device. Camera identity is persisted in .vts.
+No physical device has been opened/tested here; CI tests real MF buffer conversion,
+padding, bottom-up orientation, alpha, truncation/unlock and enumeration only.
+Actual hardware, disconnect/reconnect behavior and long sessions need validation.
+
+No additional library was integrated: Windows SDK/OS COM and MF APIs only.
+References used for API contracts, not copied implementations:
+https://learn.microsoft.com/en-us/windows/win32/api/mfobjects/nf-mfobjects-imf2dbuffer-lock2d
+https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nn-mfreadwrite-imfsourcereadercallback
+https://learn.microsoft.com/en-us/windows/win32/medfound/mf-source-reader-enable-video-processing

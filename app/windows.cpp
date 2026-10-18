@@ -13,6 +13,7 @@
 #include <charconv>
 #include <array>
 #include "windows_desktop.hpp"
+#include "windows_camera.hpp"
 #include "windows_output.hpp"
 #include "audio_buffer.hpp"
 #include <numbers>
@@ -24,13 +25,14 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
 std::unique_ptr<Switcher> program;
 int selected=0,serial=0,programScene=0;
 std::vector<std::string> sceneNames;
+std::vector<CameraDevice> cameras;
 std::map<std::shared_ptr<const VideoSource>,SourceDefinition> definitions;
 std::string utf8(const std::filesystem::path& path) {
     auto s=path.u8string();return {reinterpret_cast<const char*>(s.data()),s.size()};
@@ -155,7 +157,13 @@ void openProject(const std::filesystem::path& path) {
     decltype(definitions) candidateDefinitions;
     for(auto definition:p.sources) {
         std::shared_ptr<const VideoSource> source;
-        if(definition.kind==SourceKind::desktop) source=std::make_shared<DesktopSource>();
+        if(definition.kind==SourceKind::camera) {
+            // Reuse an already-open device; a transactional project open must not
+            // acquire the same physical device twice.
+            for(const auto& entry:definitions) if(entry.second.kind==SourceKind::camera && entry.second.path==definition.path) {source=entry.first;break;}
+            if(!source) source=std::make_shared<CameraSource>(wide(definition.path));
+        }
+        else if(definition.kind==SourceKind::desktop) source=std::make_shared<DesktopSource>();
         else if(definition.kind==SourceKind::image) {
             auto file=std::filesystem::u8path(definition.path);
             if(file.is_relative()) file=std::filesystem::absolute(path).parent_path()/file;
@@ -214,8 +222,39 @@ void pruneDefinitions() {
         return true;
     });
 }
+void refreshCameras() {
+    auto available=camera_devices();cameras=std::move(available);
+    auto list=GetDlgItem(window,CameraList);SendMessage(list,CB_RESETCONTENT,0,0);
+    for(const auto& device:cameras) SendMessage(list,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(device.name.c_str()));
+    if(!cameras.empty()) SendMessage(list,CB_SETCURSEL,0,0);
+}
 void command(int id) {
     if(id==UseMic || id==Mute) return;
+    if(id==RefreshCameras) {refreshCameras();return;}
+    if(id==AddCamera) {
+        auto index=SendMessage(GetDlgItem(window,CameraList),CB_GETCURSEL,0,0);
+        if(index==CB_ERR) throw std::runtime_error("Select a camera; use Atualizar cameras to refresh devices");
+        const auto& device=cameras.at(static_cast<std::size_t>(index));
+        auto path=utf8(std::filesystem::path(device.id));
+        std::shared_ptr<const VideoSource> source;
+        for(const auto& entry:definitions) if(entry.second.kind==SourceKind::camera && entry.second.path==path) {source=entry.first;break;}
+        auto key=nextId("Camera ");
+        if(!source) {
+            source=std::make_shared<CameraSource>(device.id);
+            definitions.emplace(source,SourceDefinition{key,SourceKind::camera,path,{0,0,0,1}});
+        }
+        auto frame=source->frame(now());double scale=std::min(640.0/frame.width(),360.0/frame.height());
+        int w=std::max(1,static_cast<int>(frame.width()*scale)),h=std::max(1,static_cast<int>(frame.height()*scale));
+        scenes[selected]->add({key,source,(640-w)/2,(360-h)/2,w,h,{}});
+        ids[selected].push_back(key);refresh();SetTimer(window,1,33,nullptr);return;
+    }
+    if(id==ReconnectCamera) {
+        auto* item=selectedItem();if(!item) throw std::runtime_error("Select a camera source");
+        auto camera=dynamic_cast<const CameraSource*>(item->source.get());
+        if(!camera) throw std::runtime_error("Selected source is not a camera");
+        if(recorder) throw std::runtime_error("Stop recording before reconnecting a camera");
+        camera->reconnect();SetTimer(window,1,33,nullptr);InvalidateRect(window,nullptr,FALSE);return;
+    }
     if(id==SaveProject || id==OpenProject) {
         if(smoke) {
             auto path=smokeAudio?L"gui-audio-project.vts":L"gui-project.vts";
@@ -301,7 +340,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
             control(L"BUTTON",L"Gravar MP4",Record,560,240,320,35);
-            control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera e transmissao pendentes. Sem microfone se a caixa estiver desmarcada.",0,220,300,660,50);
+            control(L"STATIC",L"Desenvolvimento: cenas, imagens e tela. Camera: selecione o dispositivo abaixo. Transmissao pendente. Sem microfone se a caixa estiver desmarcada.",0,220,300,660,50);
             control(L"BUTTON",L"Gravar microfone padrao",UseMic,220,360,260,30,BS_AUTOCHECKBOX);
             control(L"BUTTON",L"Silenciar audio",Mute,500,360,240,30,BS_AUTOCHECKBOX);
             control(L"STATIC",L"Ganho do microfone (-60 a +12 dB)",0,220,405,300,25);
@@ -321,6 +360,10 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                 SendMessage(edit,EM_SETLIMITTEXT,12,0);
             }
             control(L"BUTTON",L"Aplicar",ApplyTransform,748,619,130,30);
+            control(L"COMBOBOX",L"",CameraList,220,665,330,180,CBS_DROPDOWNLIST|WS_VSCROLL);
+            control(L"BUTTON",L"Atualizar cameras",RefreshCameras,560,665,160,28);
+            control(L"BUTTON",L"Adicionar camera",AddCamera,730,665,150,28);
+            control(L"BUTTON",L"Reconectar fonte",ReconnectCamera,220,705,180,28);
             addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
@@ -373,7 +416,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     if(!InitCommonControlsEx(&common)) {MFShutdown();CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
     if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
-    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,710,nullptr,nullptr,instance,nullptr);
+    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,790,nullptr,nullptr,instance,nullptr);
     if(!main) {MFShutdown();CoUninitialize();return 1;}ShowWindow(main,show);
     MSG message{};int status;
     while((status=GetMessage(&message,nullptr,0,0))>0) {TranslateMessage(&message);DispatchMessage(&message);}
