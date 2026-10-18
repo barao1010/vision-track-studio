@@ -23,6 +23,16 @@ int main() {
         bool rejected=false;try {vision::camera_rgb32(buffer.Get(),2,2,16);}catch(const std::exception&) {rejected=true;}check(rejected);
         // A failed conversion must still unlock the buffer.
         check(SUCCEEDED(buffer->Lock(&bytes,nullptr,nullptr)));buffer->Unlock();
+        ComPtr<IMFMediaBuffer> image;check(SUCCEEDED(MFCreate2DMediaBuffer(2,2,MFVideoFormat_RGB32.Data1,TRUE,&image)));
+        ComPtr<IMF2DBuffer> two;check(SUCCEEDED(image.As(&two)));LONG pitch=0;
+        check(SUCCEEDED(two->Lock2D(&bytes,&pitch)));
+        for(int y=0;y<2;++y) for(int x=0;x<2;++x) {
+            auto pixel=bytes+static_cast<std::ptrdiff_t>(y)*pitch+4*x;
+            pixel[0]=y?255:0;pixel[1]=0;pixel[2]=y?0:255;pixel[3]=0;
+        }
+        check(SUCCEEDED(two->Unlock2D()));
+        auto imageFrame=vision::camera_rgb32(image.Get(),2,2,8);
+        check(imageFrame.at(0,0).r==1 && imageFrame.at(0,1).b==1);
         auto devices=vision::camera_devices();
         for(const auto& d:devices) check(!d.id.empty());
         std::cout<<"PASS: RGB32 padded rows, negative stride, opaque alpha, truncated buffers, enumeration; no physical camera opened\n";

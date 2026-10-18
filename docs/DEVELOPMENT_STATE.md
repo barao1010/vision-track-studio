@@ -180,3 +180,8 @@ References used for API contracts, not copied implementations:
 https://learn.microsoft.com/en-us/windows/win32/api/mfobjects/nf-mfobjects-imf2dbuffer-lock2d
 https://learn.microsoft.com/en-us/windows/win32/api/mfreadwrite/nn-mfreadwrite-imfsourcereadercallback
 https://learn.microsoft.com/en-us/windows/win32/medfound/mf-source-reader-enable-video-processing
+
+Camera frame selection currently uses the most recent sample, without device-clock
+latency compensation. This is not evidence of long-duration camera/audio sync.
+Added a real MF 2D-buffer test alongside contiguous buffers; no hardware required.
+Camera project contracts passed local ASan+UBSan (detect_leaks=0).

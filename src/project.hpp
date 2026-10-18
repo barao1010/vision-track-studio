@@ -6,7 +6,7 @@ enum class SourceKind { image=0, desktop=1, solid=2, camera=3 };
 struct SourceDefinition {
     std::string id;
     SourceKind kind=SourceKind::solid;
-    std::string path; // UTF-8; relative paths resolve against the project directory
+    std::string path; // UTF-8 image path (relative to project), or camera symbolic link
     Pixel color{0,0,0,1};
 };
 struct SavedItem {
