@@ -346,3 +346,12 @@ existing360p regions exactly and normalizing regions for HD while keeping all
 color/audio/timestamp thresholds. All previous fixtures remain. Native canvas
 resolution/render scheduling, approved UI, browser audio, streaming, extras and
 installer remain pending.
+
+Output resolution validation:5130fa7 run39160283640 passed all3jobs/22Windows
+contracts and actual90-frame720p/1080p decodes with unchanged color/audio/time
+criteria. Default/multirate/bitrate regressions and GUI27silent/84tone-mute passed.
+Performance limitation:3-second fixtures took3.31s at720p and7.36s at1080p on
+the CI runner. Thus this does NOT prove real-time HD; CPU scaling/encoding needs
+optimization before delivery. Canvas remains640x360 upscaled, no new HD detail.
+Next prioritize render/GPU performance and approved UI; browser audio, streaming,
+extras, native canvas profiles and installer remain pending.
