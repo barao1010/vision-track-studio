@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <span>
 
 namespace vision {
 // Linear-light, straight-alpha pixels. Output adapters own colour conversion.
@@ -12,6 +13,8 @@ public:
     Frame(int width, int height, Pixel fill={});
     int width() const { return width_; }
     int height() const { return height_; }
+    std::span<Pixel> row(int y);
+    std::span<const Pixel> row(int y) const;
     Pixel& at(int x, int y);
     const Pixel& at(int x, int y) const;
 private:

@@ -367,3 +367,14 @@ encoded-media thresholds remain unchanged. No new dependency or copied code.
 Local packing tests passed ASan+UBSan detect_leaks=0. Windows encoded output
 and performance measurements pending; this does not resolve full rendering,
 HD-native canvas, approved UI, streaming or other incomplete features.
+
+Transfer2a687d8 run39181443611 passed all3jobs/23Windows contracts and all
+media decodes (GUI28silent/85tone-mute). HD fixture times3.41s720p/7.48s1080p
+did NOT demonstrate end-to-end improvement over previous3.31/7.36s; no realtime
+claim. Next optimization uses separable bilinear scaling, precomputed horizontal
+weights and two cached premultiplied rows, preserving alpha semantics. Added
+bounds-checked Frame row spans. Independent four-tap pixel oracle passes for
+nonuniform color/alpha with up/down scales; ASan+UBSan passed detect_leaks=0.
+Local -O2 microbenchmark15 changing640x360→1920x1080 frames: old0.804811s,
+new0.161213s, same checksum. This isolates scaling, not capture/encoder or real-
+time application performance. Windows integration validation pending.

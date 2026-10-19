@@ -26,6 +26,14 @@ Frame::Frame(int w,int h,Pixel p):width_(w),height_(h) {
     require(w>0 && h>0 && w<=16384 && h<=16384,"Invalid frame dimensions");
     pixels_.assign(static_cast<std::size_t>(w)*h,p);
 }
+std::span<Pixel> Frame::row(int y) {
+    if(y<0 || y>=height_) throw std::out_of_range("Pixel row");
+    return {pixels_.data()+static_cast<std::size_t>(y)*width_,static_cast<std::size_t>(width_)};
+}
+std::span<const Pixel> Frame::row(int y) const {
+    if(y<0 || y>=height_) throw std::out_of_range("Pixel row");
+    return {pixels_.data()+static_cast<std::size_t>(y)*width_,static_cast<std::size_t>(width_)};
+}
 Pixel& Frame::at(int x,int y) {
     if(x<0 || y<0 || x>=width_ || y>=height_) throw std::out_of_range("Pixel");
     return pixels_[static_cast<std::size_t>(y)*width_+x];
