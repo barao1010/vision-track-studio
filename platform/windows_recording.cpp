@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "windows_recording.hpp"
 #include "recording_rate.hpp"
+#include "video_pack.hpp"
 #include <windows.h>
 #include <mfapi.h>
 #include <mfidl.h>
@@ -33,7 +34,7 @@ void audioType(IMFMediaType* t,const GUID& subtype,int rate) {
     checked(t->SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND,rate),"Audio sample rate");
     checked(t->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE,16),"Audio bit depth");
 }
-BYTE srgb(float l) {l=std::clamp(l,0.f,1.f);return static_cast<BYTE>(std::lround(255*(l<=.0031308f?12.92f*l:1.055f*std::pow(l,1.f/2.4f)-.055f)));}
+
 void sample(IMFSinkWriter* writer,DWORD stream,const void* data,DWORD size,LONGLONG time,LONGLONG duration) {
     ComPtr<IMFMediaBuffer> buffer;checked(MFCreateMemoryBuffer(size,&buffer),"Create sample buffer");
     BYTE* dest=nullptr;checked(buffer->Lock(&dest,nullptr,nullptr),"Lock sample buffer");
@@ -80,13 +81,7 @@ void WindowsRecorder::append(const Frame& frame,const AudioBlock& audio) {
     if(s.finished || s.failed) throw std::logic_error("Recorder is closed or failed");
     auto next=(s.frames+1)*s.rate/s.fps;
     if(frame.width()!=s.width || frame.height()!=s.height || audio.channels!=2 || audio.start_sample!=s.samples || audio.samples.size()!=static_cast<std::size_t>(next-s.samples)*2) throw std::invalid_argument("Audio/video timeline mismatch");
-    std::vector<BYTE> pixels(static_cast<std::size_t>(s.width)*s.height*4);
-    for(int y=0;y<s.height;++y) for(int x=0;x<s.width;++x) {
-        auto p=frame.at(x,y);if(!std::isfinite(p.r)||!std::isfinite(p.g)||!std::isfinite(p.b)||!std::isfinite(p.a)) throw std::invalid_argument("Nonfinite pixel");
-        // Sink writer consumes these positive-stride RGB32 buffers in top-down order.
-        auto n=(static_cast<std::size_t>(y)*s.width+x)*4;float a=std::clamp(p.a,0.f,1.f);
-        pixels[n]=srgb(p.b*a);pixels[n+1]=srgb(p.g*a);pixels[n+2]=srgb(p.r*a);
-    }
+    auto pixels=pack_bgrx(frame);
     std::vector<std::int16_t> pcm;pcm.reserve(audio.samples.size());
     for(float v:audio.samples) {if(!std::isfinite(v)) throw std::invalid_argument("Nonfinite sample");pcm.push_back(static_cast<std::int16_t>(std::lround(std::clamp(v,-1.f,1.f)*32767)));}
     auto time=s.frames*10000000/s.fps, end=(s.frames+1)*10000000/s.fps;

@@ -355,3 +355,15 @@ the CI runner. Thus this does NOT prove real-time HD; CPU scaling/encoding needs
 optimization before delivery. Canvas remains640x360 upscaled, no new HD detail.
 Next prioritize render/GPU performance and approved UI; browser audio, streaming,
 extras, native canvas profiles and installer remain pending.
+
+## Pixel transfer optimization — 2026-10-19 (Windows validation pending)
+
+Replaced per-channel per-pixel pow calls in native BGRX encoding with an original
+65536-entry sRGB transfer table. Table initialization is once/thread-safe; lookup
+quantization introduces at most one8-bit code difference from analytic transfer,
+verified against1,000,001 inputs with monotonicity/endpoints checks. Alpha-over-
+black, top-down BGRX order and nonfinite rejection remain explicit. All existing
+encoded-media thresholds remain unchanged. No new dependency or copied code.
+Local packing tests passed ASan+UBSan detect_leaks=0. Windows encoded output
+and performance measurements pending; this does not resolve full rendering,
+HD-native canvas, approved UI, streaming or other incomplete features.
