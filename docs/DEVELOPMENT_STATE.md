@@ -378,3 +378,11 @@ nonuniform color/alpha with up/down scales; ASan+UBSan passed detect_leaks=0.
 Local -O2 microbenchmark15 changing640x360→1920x1080 frames: old0.804811s,
 new0.161213s, same checksum. This isolates scaling, not capture/encoder or real-
 time application performance. Windows integration validation pending.
+
+Separable scaling validation:55c9c1a run39181731563 passed all3jobs/23Windows
+contracts and all native decoded fixtures with unchanged thresholds. GUI28silent/
+87tone-mute passed. HD3-second fixture elapsed2.03s720p/4.20s1080p versus
+3.41s/7.48s in preceding run. CI machines vary; these are observed run timings,
+not a controlled hardware benchmark.1080p still slower than real time; native
+HD canvas, GPU/encoder optimization and full UI/streaming/extras remain pending.
+Do not claim complete OBS parity or deliver the engineering harness.
