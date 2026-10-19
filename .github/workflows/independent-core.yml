@@ -21,6 +21,8 @@ jobs:
         if: runner.os == 'Windows'
       - run: |
           python validation/check_native_recording.py build/native-720.mp4 30 720
+          python validation/check_native_recording.py build/canvas-720.mp4 30 720
+          python validation/check_native_recording.py build/canvas-downscale.mp4 30 360
           python validation/check_native_recording.py build/native-1080.mp4 30 1080
           python validation/check_native_recording.py build/native-bitrate.mp4
           python validation/check_native_recording.py build/native-24.mp4 24

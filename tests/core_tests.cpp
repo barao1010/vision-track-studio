@@ -12,6 +12,17 @@ std::shared_ptr<Scene> solid(Pixel p) {
     s->add({"background",std::make_shared<StillSource>(Frame(2,2,p)),0,0,2,2,{}});return s;
 }
 int main() {
+    // Single-pixel detail at native HD coordinates must not pass through a 360p canvas.
+    for(int height:{720,1080}) {
+        const int width=height*16/9;
+        Frame detail(width,height,{0,0,0,1});
+        for(int x=0;x<width;++x) detail.at(x,height-1)={float(x%2),float(1-x%2),0,1};
+        auto scene=std::make_shared<Scene>();
+        scene->add({"native",std::make_shared<StillSource>(std::move(detail)),0,0,width,height,{}});
+        Switcher native(width,height,scene);auto pixels=native.render(0);
+        check(pixels.width()==width && pixels.height()==height);
+        for(int x=0;x<width;++x) {near(pixels.at(x,height-1).r,float(x%2));near(pixels.at(x,height-1).g,float(1-x%2));}
+    }
     auto red=solid({1,0,0,1}); auto blue=solid({0,0,1,1});
     // Real pixel composition: alpha, order, visibility, crop, scale, offscreen bounds.
     red->add({"overlay",std::make_shared<StillSource>(Frame(1,1,{0,0,1,.5f})),0,0,1,1,{}});

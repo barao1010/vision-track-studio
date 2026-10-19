@@ -29,7 +29,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168, CanvasResolution=169;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -41,6 +41,8 @@ std::vector<MicrophoneDevice> microphones;
 std::wstring selectedMicrophone;
 std::vector<std::wstring> microphoneChoices;
 void populateMicrophones();
+int canvasHeight=360;
+int canvasWidth() {return recording_output_width(canvasHeight);}
 constexpr std::array<int,3> outputHeights{360,720,1080};
 int chosenHeight() {auto index=SendMessage(GetDlgItem(window,OutputResolution),CB_GETCURSEL,0,0);return outputHeights.at(static_cast<std::size_t>(index));}
 constexpr std::array<int,5> recordingRates{24,25,30,50,60};
@@ -85,6 +87,7 @@ void stopRecording() {
     EnableWindow(GetDlgItem(window,RecordingRate),TRUE);
     EnableWindow(GetDlgItem(window,VideoBitrate),TRUE);
     EnableWindow(GetDlgItem(window,OutputResolution),TRUE);
+    EnableWindow(GetDlgItem(window,CanvasResolution),TRUE);
     EnableWindow(GetDlgItem(window,MicrophoneList),TRUE);
     EnableWindow(GetDlgItem(window,RefreshMicrophones),TRUE);
     SetWindowText(GetDlgItem(window,Record),L"Gravar MP4");
@@ -107,6 +110,7 @@ void startRecording(const std::filesystem::path& path) {
     EnableWindow(GetDlgItem(window,RecordingRate),FALSE);
     EnableWindow(GetDlgItem(window,VideoBitrate),FALSE);
     EnableWindow(GetDlgItem(window,OutputResolution),FALSE);
+    EnableWindow(GetDlgItem(window,CanvasResolution),FALSE);
     EnableWindow(GetDlgItem(window,MicrophoneList),FALSE);
     EnableWindow(GetDlgItem(window,RefreshMicrophones),FALSE);
     recorder=std::move(starting);
@@ -143,11 +147,11 @@ void refresh() {
 void addSource(Frame image,SourceDefinition definition) {
     auto id=nextId("Imagem ");
     definition.id=id;
-    double scale=std::min(640.0/image.width(),360.0/image.height());
+    double scale=std::min(double(canvasWidth())/image.width(),double(canvasHeight)/image.height());
     int w=std::max(1,static_cast<int>(image.width()*scale)),h=std::max(1,static_cast<int>(image.height()*scale));
     auto source=std::make_shared<StillSource>(std::move(image));
     definitions.emplace(source,std::move(definition));
-    scenes[selected]->add({id,source,(640-w)/2,(360-h)/2,w,h,{}});
+    scenes[selected]->add({id,source,(canvasWidth()-w)/2,(canvasHeight-h)/2,w,h,{}});
     ids[selected].push_back(id);refresh();
 }
 void addScene() {
@@ -156,7 +160,7 @@ void addScene() {
     auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
 }
 Project snapshotProject() {
-    Project p;p.output_height=chosenHeight();p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
+    Project p;p.canvas_height=canvasHeight;p.output_height=chosenHeight();p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
     p.gain_db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
     p.microphone=SendMessage(GetDlgItem(window,UseMic),BM_GETCHECK,0,0)==BST_CHECKED;
     p.muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
@@ -211,10 +215,11 @@ void openProject(const std::filesystem::path& path) {
         candidateScenes.push_back(std::move(scene));candidateIds.push_back(std::move(keys));
     }
     auto candidateMicrophone=wide(p.microphone_id);
-    auto candidateProgram=std::make_unique<Switcher>(640,360,candidateScenes.at(p.program_scene));
+    auto candidateProgram=std::make_unique<Switcher>(recording_output_width(p.canvas_height),p.canvas_height,candidateScenes.at(p.program_scene));
     // All decoding and source validation precede replacement of the active project.
     selectedMicrophone=std::move(candidateMicrophone);populateMicrophones();
     scenes=std::move(candidateScenes);ids=std::move(candidateIds);definitions=std::move(candidateDefinitions);
+    canvasHeight=p.canvas_height;
     sceneNames=std::move(names);program=std::move(candidateProgram);selected=p.selected_scene;programScene=p.program_scene;
     SendMessage(scenesBox,LB_RESETCONTENT,0,0);
     for(const auto& label:labels) SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));
@@ -222,6 +227,7 @@ void openProject(const std::filesystem::path& path) {
     SetWindowTextW(GetDlgItem(window,VideoBitrate),std::to_wstring(p.video_kbps).c_str());
     auto heightIndex=std::find(outputHeights.begin(),outputHeights.end(),p.output_height)-outputHeights.begin();
     SendMessage(GetDlgItem(window,OutputResolution),CB_SETCURSEL,heightIndex,0);
+    SendMessage(GetDlgItem(window,CanvasResolution),CB_SETCURSEL,std::find(outputHeights.begin(),outputHeights.end(),canvasHeight)-outputHeights.begin(),0);
     auto rateIndex=std::find(recordingRates.begin(),recordingRates.end(),p.recording_fps)-recordingRates.begin();
     SendMessage(GetDlgItem(window,RecordingRate),CB_SETCURSEL,rateIndex,0);
     SendMessage(GetDlgItem(window,Gain),TBM_SETPOS,TRUE,p.gain_db);
@@ -306,10 +312,11 @@ void command(int id) {
     if(id==AddBrowser) {
         auto read=[](int control) {auto handle=GetDlgItem(window,control);int n=GetWindowTextLengthW(handle);std::wstring text(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,text.data(),n+1);text.resize(n);return text;};
         auto url=read(BrowserUrl),css=read(BrowserCss);
-        auto source=std::make_shared<BrowserSource>(url,css,640,360);auto key=nextId("Navegador ");
+        auto source=std::make_shared<BrowserSource>(url,css,canvasWidth(),canvasHeight);auto key=nextId("Navegador ");
         SourceDefinition definition{key,SourceKind::browser,utf8(std::filesystem::path(url)),{0,0,0,1}};
+        definition.browser_width=canvasWidth();definition.browser_height=canvasHeight;
         definition.css=utf8(std::filesystem::path(css));definitions.emplace(source,std::move(definition));
-        scenes[selected]->add({key,source,0,0,640,360,{}});ids[selected].push_back(key);refresh();return;
+        scenes[selected]->add({key,source,0,0,canvasWidth(),canvasHeight,{}});ids[selected].push_back(key);refresh();return;
     }
     if(id==RefreshCameras) {refreshCameras();return;}
     if(id==AddCamera) {
@@ -324,9 +331,9 @@ void command(int id) {
             source=std::make_shared<CameraSource>(device.id);
             definitions.emplace(source,SourceDefinition{key,SourceKind::camera,path,{0,0,0,1}});
         }
-        auto frame=source->frame(now());double scale=std::min(640.0/frame.width(),360.0/frame.height());
+        auto frame=source->frame(now());double scale=std::min(double(canvasWidth())/frame.width(),double(canvasHeight)/frame.height());
         int w=std::max(1,static_cast<int>(frame.width()*scale)),h=std::max(1,static_cast<int>(frame.height()*scale));
-        scenes[selected]->add({key,source,(640-w)/2,(360-h)/2,w,h,{}});
+        scenes[selected]->add({key,source,(canvasWidth()-w)/2,(canvasHeight-h)/2,w,h,{}});
         ids[selected].push_back(key);refresh();SetTimer(window,1,33,nullptr);return;
     }
     if(id==ReconnectCamera) {
@@ -361,7 +368,7 @@ void command(int id) {
     else if(id==AddDesktop) {
         auto key=nextId("Tela ");
         auto source=std::make_shared<DesktopSource>();definitions.emplace(source,SourceDefinition{key,SourceKind::desktop,"",{0,0,0,1}});
-        scenes[selected]->add({key,source,0,0,640,360,{}});
+        scenes[selected]->add({key,source,0,0,canvasWidth(),canvasHeight,{}});
         ids[selected].push_back(key);refresh();
     }
     else if(id==AddImage) {
@@ -384,7 +391,7 @@ void command(int id) {
             }
         }
         if(id==Toggle) item->visible=!item->visible;
-        if(id==Smaller || id==Larger) {double factor=id==Smaller?.9:1.1;item->width=std::clamp(static_cast<int>(item->width*factor),1,8192);item->height=std::clamp(static_cast<int>(item->height*factor),1,8192);item->x=(640-item->width)/2;item->y=(360-item->height)/2;}
+        if(id==Smaller || id==Larger) {double factor=id==Smaller?.9:1.1;item->width=std::clamp(static_cast<int>(item->width*factor),1,8192);item->height=std::clamp(static_cast<int>(item->height*factor),1,8192);item->x=(canvasWidth()-item->width)/2;item->y=(canvasHeight-item->height)/2;}
         if(id==Remove) {auto key=item->id;scenes[selected]->remove(key);std::erase(ids[selected],key);pruneDefinitions();}
         refresh();
         auto it=std::find(ids[selected].begin(),ids[selected].end(),key);
@@ -418,10 +425,14 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Remover fonte",Remove,15,455,180,30);
             control(L"BUTTON",L"Diminuir",Smaller,15,490,85,30);control(L"BUTTON",L"Ampliar",Larger,105,490,90,30);
             control(L"BUTTON",L"Capturar tela",AddDesktop,15,525,180,30);
-            control(L"STATIC",L"Saida (canvas 640x360)",0,15,565,195,25);
+            control(L"STATIC",L"Resolucao de saida",0,15,565,195,25);
             auto resolution=control(L"COMBOBOX",L"",OutputResolution,15,595,180,140,CBS_DROPDOWNLIST);
             for(int height:outputHeights) {auto label=std::to_wstring(recording_output_width(height))+L" x "+std::to_wstring(height);SendMessage(resolution,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
             SendMessage(resolution,CB_SETCURSEL,0,0);
+            control(L"STATIC",L"Canvas (pixels nativos)",0,15,635,195,25);
+            auto canvas=control(L"COMBOBOX",L"",CanvasResolution,15,665,180,140,CBS_DROPDOWNLIST);
+            for(int height:outputHeights) {auto label=std::to_wstring(recording_output_width(height))+L" x "+std::to_wstring(height);SendMessage(canvas,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
+            SendMessage(canvas,CB_SETCURSEL,0,0);
             control(L"STATIC",L"PREVIA",0,220,15,300,25);control(L"STATIC",L"PROGRAMA",0,560,15,300,25);
             control(L"BUTTON",L"Corte",Cut,220,240,150,35);control(L"BUTTON",L"Fade 300 ms",Fade,380,240,150,35);
             control(L"BUTTON",L"Gravar MP4",Record,560,240,320,35);
@@ -465,9 +476,18 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             SendMessage(css,EM_SETLIMITTEXT,65536,0);
             control(L"BUTTON",L"Aplicar CSS selecionado",ApplyBrowserCss,15,810,195,30);
             control(L"BUTTON",L"Recarregar navegador",ReloadBrowser,15,850,195,30);
-            addScene();program=std::make_unique<Switcher>(640,360,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
+            addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
+            else if(LOWORD(wp)==CanvasResolution && HIWORD(wp)==CBN_SELCHANGE) {
+                if(!recorder) {
+                    auto index=SendMessage(GetDlgItem(hwnd,CanvasResolution),CB_GETCURSEL,0,0);
+                    int height=outputHeights.at(static_cast<std::size_t>(index));
+                    // Preserve layer pixel coordinates. Applying canvas settings ends an active fade.
+                    auto replacement=std::make_unique<Switcher>(recording_output_width(height),height,scenes.at(programScene));
+                    program=std::move(replacement);canvasHeight=height;InvalidateRect(hwnd,nullptr,FALSE);
+                }
+            }
             else if(LOWORD(wp)==MicrophoneList && HIWORD(wp)==CBN_SELCHANGE) {
                 if(!recorder) {
                     auto index=SendMessage(GetDlgItem(hwnd,MicrophoneList),CB_GETCURSEL,0,0);
@@ -501,12 +521,18 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     auto layered=program->render(now());verify(layered.at(400,180).r==.5f && layered.at(400,180).b==.5f);
                     SendMessage(hwnd,WM_COMMAND,SaveProject,0);SendMessage(hwnd,WM_COMMAND,OpenProject,0);
                     verify(program->render(now()).at(400,180).b==.5f);
+                    auto canvas=GetDlgItem(hwnd,CanvasResolution);
+                    SendMessage(canvas,CB_SETCURSEL,1,0);SendMessage(hwnd,WM_COMMAND,MAKEWPARAM(CanvasResolution,CBN_SELCHANGE),reinterpret_cast<LPARAM>(canvas));
+                    auto native=program->render(now());verify(native.width()==1280 && native.height()==720);
+                    verify(native.at(400,180).b==.5f && native.at(1000,600).a==0);
+                    SendMessage(hwnd,WM_COMMAND,SaveProject,0);SendMessage(hwnd,WM_COMMAND,OpenProject,0);
+                    verify(canvasHeight==720 && snapshotProject().canvas_height==720 && program->render(now()).width()==1280);
                     std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
             captureRecording(now());
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
-        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(640,360,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
+        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(canvasWidth(),canvasHeight,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
         case WM_DESTROY: recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }

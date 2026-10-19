@@ -386,3 +386,18 @@ contracts and all native decoded fixtures with unchanged thresholds. GUI28silent
 not a controlled hardware benchmark.1080p still slower than real time; native
 HD canvas, GPU/encoder optimization and full UI/streaming/extras remain pending.
 Do not claim complete OBS parity or deliver the engineering harness.
+
+## Native canvas — 2026-10-19 (Windows validation pending)
+
+Canvas and output resolution are now independent: 640x360,1280x720,1920x1080.
+Project format7 preserves canvas_height and reads1..6 with360p default. Scene
+composition and Switcher render directly at canvas dimensions; new image/camera/
+desktop/browser layers fit that canvas (browser viewport is also saved). Changing
+canvas preserves existing pixel coordinates and ends an active fade at its target;
+settings are locked while recording. Output worker scales only when input/output
+dimensions differ, including HD-to360p downscaling. No dependency added.
+Added native single-pixel HD detail contracts, project migration/validation,
+GUI canvas/pixel-coordinate/save-open checks and native720p/downscaled360p MP4
+encode/decode fixtures with existing color/audio/timing criteria unchanged.
+Windows validation pending. This does not resolve CPU throughput, render off UI,
+approved interface, browser audio, streaming, extras or installer. No partial release.

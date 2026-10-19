@@ -42,7 +42,7 @@ public:
             }
         }
         auto mixed=mix(audio.start_sample,audioFrames_,2,{{&audio,packet.gain,packet.muted}});
-        if(output_height_==360) recorder_.append(*packet.frame,mixed.block);
+        if(packet.frame->height()==output_height_ && packet.frame->width()==recording_output_width(output_height_)) recorder_.append(*packet.frame,mixed.block);
         else {
             if(previous_!=packet.frame) {
                 scaled_=std::make_unique<Frame>(scale_frame(*packet.frame,recording_output_width(output_height_),output_height_));previous_=packet.frame;

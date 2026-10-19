@@ -14,7 +14,10 @@ int main(int argc,char** argv) {
     p.sources.push_back({"camera",SourceKind::camera,"device-symbolic-link",{0,0,0,1}});
     SourceDefinition browser{"web",SourceKind::browser,"https://example.invalid/overlay",{0,0,0,1}};
     browser.css="body { color: white; }";p.sources.push_back(browser);
-    p.output_height=1080;
+    p.output_height=1080;p.canvas_height=720;
+    check(decode_project("VISION_PROJECT 6\n0 0 0 0 0 30 4000 \"\" 1080\n0\n1\n\"Legacy\" 0\n").canvas_height==360);
+    auto badCanvas=p;badCanvas.canvas_height=721;rejects([&]{encode_project(badCanvas);});
+    check(decode_project(encode_project(p)).canvas_height==720);
     check(decode_project("VISION_PROJECT 5\n0 0 0 0 0 30 4000 \"\"\n0\n1\n\"Legacy\" 0\n").output_height==360);
     auto badHeight=p;badHeight.output_height=721;rejects([&]{encode_project(badHeight);});
     p.recording_fps=25;p.video_kbps=8000;p.microphone_id="endpoint-\"saved\"";
