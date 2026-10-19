@@ -40,6 +40,7 @@ jobs:
           name: windows-native-recording-validation
           path: |
             build/native-*.mp4
+            build/canvas-*.mp4
             build/gui-recording.mp4
             build/gui-audio.mp4
             build/Testing/Temporary/LastTest.log

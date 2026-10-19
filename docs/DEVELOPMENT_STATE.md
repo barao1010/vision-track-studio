@@ -401,3 +401,14 @@ GUI canvas/pixel-coordinate/save-open checks and native720p/downscaled360p MP4
 encode/decode fixtures with existing color/audio/timing criteria unchanged.
 Windows validation pending. This does not resolve CPU throughput, render off UI,
 approved interface, browser audio, streaming, extras or installer. No partial release.
+
+Native canvas validation: f1f9d5b run39201135346 passed all3jobs and25Windows
+contracts. Native720p and720p→360p each decoded90frames with unchanged color,
+orientation, timestamps and stereo440Hz thresholds. GUI canvas change preserves
+pixel positions and survives save/open; GUI recordings27silent/84tone-mute pass.
+Core HD one-pixel detail and project tests passed local ASan+UBSan detect_leaks=0.
+No camera/microphone hardware validation. Native1080p composition is pixel-tested;
+new native-canvas MP4 fixtures cover720p, not1080p. Timings vary between runners;
+this short synthetic run is not evidence of sustained real-time capture/render.
+Next prioritize approved UI and render scheduling outside UI, browser audio,
+streaming local validation, extras and installer. Engineering harness not delivered.
