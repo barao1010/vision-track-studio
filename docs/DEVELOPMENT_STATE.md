@@ -486,3 +486,20 @@ Local execution still fails before command launch with disk-space error; no loca
 build or sanitizer claim for this increment. Remote HEAD is authoritative; local
 checkout remains168e610 and must be fast-forwarded after recovery. No package
 published; program render migration and other product gaps remain pending.
+
+## Workspace recovery / bounded validation storage — 2026-10-20
+
+Local execution recovered enough to inspect disk usage: 837 regenerable raw RGB
+files (30,380,503,040 bytes) occupied build/comparison and
+build/reproducible-comparison/raw. Removed only video.rgb and .video.rgb.* files
+from those generated directories, preserving source, reports and encoded movies.
+Filesystem now has approximately27GiB free. Clean local checkout fast-forwarded
+from168e610 to8fdb3ba without overwriting changes.
+run_comparison.py now uses a system TemporaryDirectory for raw video/audio and
+removes it after encoding or on subprocess failure/timeout. Encoded recordings,
+measurements, reference hashes, negative controls and thresholds are unchanged.
+Rebuilt render_fixture from current sources and reran the full local comparison:
+210frames/336000stereo samples; both pinned OBS reference comparisons passed and
+silence/hard-cut negative controls were rejected. Failure-path cleanup exercised
+with a failing renderer; successful report contains no raw directory. No full
+OBS parity or hardware validation inferred. Windows/CI validation pending.

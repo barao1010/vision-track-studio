@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 from compare_recordings import measure, compare
 
 EXPECTED = {
@@ -16,13 +17,17 @@ def run(renderer, reference, output):
     output.mkdir(parents=True, exist_ok=False)
     for name, rgb in [('color', (204, 102, 51)), ('image', (20, 200, 50))]:
         (output / f'{name}.ppm').write_bytes(b'P6\n640 360\n255\n'+bytes(rgb)*640*360)
-    subprocess.run([str(renderer.resolve()), str(output/'color.ppm'), str(output/'image.ppm'),
-                    str(output/'raw')], check=True, timeout=120)
     movie = output/'independent.mkv'
-    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'rawvideo', '-pixel_format', 'rgb24',
-                    '-video_size', '640x360', '-framerate', '30', '-i', str(output/'raw/video.rgb'),
-                    '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', str(output/'raw/audio.f32le'),
-                    '-c:v', 'ffv1', '-c:a', 'pcm_f32le', str(movie)], check=True, timeout=120)
+    # Raw frames are large and regenerable. Keep them outside the persisted
+    # workspace and remove them on success, renderer error or encoder timeout.
+    with tempfile.TemporaryDirectory(prefix='vision-parity-') as temporary:
+        raw = Path(temporary)/'raw'
+        subprocess.run([str(renderer.resolve()), str(output/'color.ppm'), str(output/'image.ppm'),
+                        str(raw)], check=True, timeout=120)
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'rawvideo', '-pixel_format', 'rgb24',
+                        '-video_size', '640x360', '-framerate', '30', '-i', str(raw/'video.rgb'),
+                        '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', str(raw/'audio.f32le'),
+                        '-c:v', 'ffv1', '-c:a', 'pcm_f32le', str(movie)], check=True, timeout=120)
     candidate = measure(movie)
     report = {'scope': '7s file rendering: scene colors, image, fade timing, stereo tone/gain',
               'reference_run': 38859179964, 'reference_artifact': 12028698711,
