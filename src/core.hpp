@@ -52,6 +52,8 @@ public:
     void transform(const std::string& id,int x,int y,int width,int height,
                    Crop crop,float opacity,std::int64_t timestamp_ns);
     Frame render(int width, int height, std::int64_t timestamp_ns) const;
+    // Capture each visible source once on the caller thread; no live source escapes.
+    Scene snapshot(std::int64_t timestamp_ns) const;
 private:
     std::vector<Item> items_; // bottom to top
 };

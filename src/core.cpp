@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <stdexcept>
 
 namespace vision {
@@ -69,6 +70,18 @@ void Scene::move(const std::string& id,std::size_t position) {
     require(position<items_.size(),"Layer outside scene");
     Item copy=item(id); remove(id);
     items_.insert(items_.begin()+static_cast<std::ptrdiff_t>(position),std::move(copy));
+}
+Scene Scene::snapshot(std::int64_t time) const {
+    Scene frozen;
+    std::map<const VideoSource*,std::shared_ptr<const VideoSource>> captured;
+    for(const auto& item:items_) {
+        if(!item.visible) continue;
+        require(item.source!=nullptr,"Missing source");
+        auto& source=captured[item.source.get()];
+        if(!source) source=std::make_shared<StillSource>(item.source->frame(time));
+        auto copy=item;copy.source=source;frozen.add(std::move(copy));
+    }
+    return frozen;
 }
 Frame Scene::render(int w,int h,std::int64_t time) const {
     Frame result(w,h);

@@ -20,6 +20,7 @@
 #include "recording_rate.hpp"
 #include "audio_buffer.hpp"
 #include "scheduled_output.hpp"
+#include "preview_renderer.hpp"
 #include <numbers>
 #include <algorithm>
 #include <chrono>
@@ -68,6 +69,7 @@ std::string nextId(const std::string& prefix) {
 bool smoke=false, smokeAudio=false;
 int smokeStep=0;
 std::unique_ptr<ScheduledOutput> recorder;
+std::unique_ptr<PreviewRenderer> preview;
 void recordFrame(std::shared_ptr<const Frame> frame) {
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
@@ -533,7 +535,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Excluir cena",DeleteScene,520,920,130,28);
             control(L"BUTTON",L"Subir cena",SceneUp,660,920,105,28);
             control(L"BUTTON",L"Descer cena",SceneDown,775,920,105,28);
-            addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
+            preview=std::make_unique<PreviewRenderer>();addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
             else if(LOWORD(wp)==CanvasResolution && HIWORD(wp)==CBN_SELCHANGE) {
@@ -562,6 +564,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     SendMessage(micBox,CB_SETCURSEL,microphoneChoices.size()-1,0);SendMessage(hwnd,WM_COMMAND,MAKEWPARAM(MicrophoneList,CBN_SELCHANGE),reinterpret_cast<LPARAM>(micBox));verify(selectedMicrophone==L"vision-saved-missing-device");
                     selectedMicrophone.clear();populateMicrophones();
                     addSource(Frame(1,1,{1,0,0,1}),{"",SourceKind::solid,"",{1,0,0,1}});SendMessage(hwnd,WM_COMMAND,Cut,0);verify(program->render(now()).at(320,180).r==1);SendMessage(hwnd,WM_COMMAND,Record,0);SendMessage(hwnd,WM_COMMAND,AddScene,0);addSource(Frame(1,1,{0,0,1,1}),{"",SourceKind::solid,"",{0,0,1,1}});SendMessage(hwnd,WM_COMMAND,Fade,0);}
+                if(smokeStep==19) {auto rendered=preview->latest();verify(rendered.frame && rendered.frame->width()==320 && rendered.frame->height()==180 && rendered.frame->at(160,90).b==1);}
                 if(smokeAudio && smokeStep==40) SendMessage(GetDlgItem(hwnd,Mute),BM_SETCHECK,BST_CHECKED,0);
                 if(smokeStep==(smokeAudio?60:20)) {captureRecording(now());SendMessage(hwnd,WM_COMMAND,Record,0);verify(program->render(now()).at(320,180).b==1);SendMessage(hwnd,WM_COMMAND,SaveProject,0);auto savedState=encode_project(snapshotProject());SendMessage(hwnd,WM_COMMAND,Toggle,0);verify(program->render(now()).at(320,180).a==0);SendMessage(hwnd,WM_COMMAND,Toggle,0);SendMessage(hwnd,WM_COMMAND,Remove,0);verify(ids[selected].empty());SendMessage(hwnd,WM_COMMAND,OpenProject,0);verify(encode_project(snapshotProject())==savedState);verify(program->render(now()).at(320,180).b==1);
                     auto before=encode_project(snapshotProject());std::ofstream("invalid-project.vts")<<"VISION_PROJECT 99";
@@ -600,11 +603,12 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
+            preview->update(*scenes[selected],canvasWidth(),canvasHeight,now());
             captureRecording(now());
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
-        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {draw(dc,scenes[selected]->render(canvasWidth(),canvasHeight,now()),220,45,320,180);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
+        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {auto ready=preview->latest();if(ready.frame) draw(dc,*ready.frame,220,45,320,180);else PatBlt(dc,220,45,320,180,BLACKNESS);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
-        case WM_DESTROY: recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
+        case WM_DESTROY: preview.reset();recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
         // An output failure ends this session; do not retry partial samples.

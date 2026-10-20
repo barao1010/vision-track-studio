@@ -437,3 +437,20 @@ removal before the live scene index, and active-scene rejection without state lo
 All native MP4/multirate/bitrate/canvas decodes passed unchanged. GUI30silent and
 84tone/mute frames passed. This is functional scene management in the engineering
 harness, not final UI, hardware certification or full OBS equivalence.
+
+## Preview composition worker — 2026-10-20 (Windows validation pending)
+
+Scene.snapshot captures each visible source once per request on the caller thread,
+sharing frozen frames between repeated layers. Hidden sources are not accessed.
+No live camera/browser source ownership crosses to the worker. PreviewRenderer
+composes and scales CPU frames off UI, retaining one pending request and one
+completed result; pending work is replaced instead of accumulating. Painting
+uses the latest completed320x180 frame without waiting for composition. Capture
+failure preserves the previous request/result; worker errors propagate; destruction
+joins the worker. GUI smoke now checks actual asynchronous preview pixels.
+Local contracts exercise capture thread affinity, shared/hidden sources, immutable
+snapshot/results, rapid replacement, failures and shutdown. No new dependency.
+IMPORTANT: this moves PREVIEW composition only. Capture still runs on UI to respect
+browser STA ownership; PROGRAM composition/transitions/recording producer remain
+on UI. It is not a complete render-thread migration or sustained-performance claim.
+Final approved interface, browser audio, streaming and extras remain incomplete.
