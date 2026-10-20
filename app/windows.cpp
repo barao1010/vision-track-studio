@@ -29,7 +29,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168, CanvasResolution=169;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168, CanvasResolution=169, SceneName=170, RenameScene=171, DuplicateScene=172, DeleteScene=173, SceneUp=174, SceneDown=175;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -142,6 +142,7 @@ void refresh() {
     SendMessage(sourcesBox,LB_RESETCONTENT,0,0);
     for(const auto& id:ids.at(selected)) {auto label=wide(id);if(!scenes[selected]->item(id).visible) label+=L" (oculta)";SendMessage(sourcesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
     if(!ids[selected].empty()) SendMessage(sourcesBox,LB_SETCURSEL,ids[selected].size()-1,0);
+    SetWindowTextW(GetDlgItem(window,SceneName),wide(sceneNames.at(selected)).c_str());
     loadTransform();InvalidateRect(window,nullptr,FALSE);
 }
 void addSource(Frame image,SourceDefinition definition) {
@@ -154,10 +155,54 @@ void addSource(Frame image,SourceDefinition definition) {
     scenes[selected]->add({id,source,(canvasWidth()-w)/2,(canvasHeight-h)/2,w,h,{}});
     ids[selected].push_back(id);refresh();
 }
+std::string uniqueSceneName(const std::string& prefix) {
+    for(int suffix=1;;++suffix) {
+        auto candidate=prefix+std::to_string(suffix);
+        if(std::find(sceneNames.begin(),sceneNames.end(),candidate)==sceneNames.end()) return candidate;
+    }
+}
+void refreshScenes() {
+    SendMessage(scenesBox,LB_RESETCONTENT,0,0);
+    for(const auto& name:sceneNames) {auto label=wide(name);SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(label.c_str()));}
+    SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
+}
 void addScene() {
-    scenes.push_back(std::make_shared<Scene>());ids.emplace_back();selected=static_cast<int>(scenes.size())-1;
-    sceneNames.push_back("Cena "+std::to_string(scenes.size()));
-    auto name=wide(sceneNames.back());SendMessage(scenesBox,LB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));SendMessage(scenesBox,LB_SETCURSEL,selected,0);refresh();
+    if(scenes.size()>=100) throw std::runtime_error("Limite de 100 cenas atingido");
+    auto name=uniqueSceneName("Cena ");
+    scenes.push_back(std::make_shared<Scene>());ids.emplace_back();sceneNames.push_back(std::move(name));
+    selected=static_cast<int>(scenes.size())-1;refreshScenes();
+}
+void pruneDefinitions();
+void editScene(int action) {
+    if(action==RenameScene) {
+        auto edit=GetDlgItem(window,SceneName);int length=GetWindowTextLengthW(edit);
+        std::wstring name(static_cast<std::size_t>(length)+1,L'\0');GetWindowTextW(edit,name.data(),length+1);name.resize(length);
+        auto first=name.find_first_not_of(L" \t\r\n"),last=name.find_last_not_of(L" \t\r\n");
+        if(first==std::wstring::npos) throw std::runtime_error("Digite um nome para a cena");
+        auto encoded=utf8(std::filesystem::path(name.substr(first,last-first+1)));
+        if(encoded.size()>512) throw std::runtime_error("Nome da cena muito longo");
+        for(std::size_t n=0;n<sceneNames.size();++n) if(n!=static_cast<std::size_t>(selected) && sceneNames[n]==encoded) throw std::runtime_error("Ja existe uma cena com esse nome");
+        sceneNames[selected]=std::move(encoded);
+    } else if(action==DuplicateScene) {
+        if(scenes.size()>=100) throw std::runtime_error("Limite de 100 cenas atingido");
+        // Item transforms are copied, source ownership is shared: never reopen a device.
+        auto copy=std::make_shared<Scene>(*scenes[selected]);auto keys=ids[selected];
+        auto name=uniqueSceneName("Copia ");
+        scenes.push_back(std::move(copy));ids.push_back(std::move(keys));sceneNames.push_back(std::move(name));selected=static_cast<int>(scenes.size())-1;
+    } else if(action==DeleteScene) {
+        if(scenes.size()==1) throw std::runtime_error("Mantenha pelo menos uma cena");
+        if(program->references(scenes[selected])) throw std::runtime_error("Troque o programa para outra cena e conclua a transicao antes de excluir");
+        scenes.erase(scenes.begin()+selected);ids.erase(ids.begin()+selected);sceneNames.erase(sceneNames.begin()+selected);
+        if(programScene>selected) --programScene;
+        selected=std::min(selected,static_cast<int>(scenes.size())-1);pruneDefinitions();
+    } else if(action==SceneUp || action==SceneDown) {
+        int next=selected+(action==SceneUp?-1:1);
+        if(next<0 || next>=static_cast<int>(scenes.size())) return;
+        std::swap(scenes[selected],scenes[next]);std::swap(ids[selected],ids[next]);std::swap(sceneNames[selected],sceneNames[next]);
+        if(programScene==selected) programScene=next;else if(programScene==next) programScene=selected;
+        selected=next;
+    }
+    refreshScenes();
 }
 Project snapshotProject() {
     Project p;p.canvas_height=canvasHeight;p.output_height=chosenHeight();p.microphone_id=utf8(std::filesystem::path(selectedMicrophone));p.video_kbps=field(VideoBitrate);p.recording_fps=chosenRate();p.selected_scene=selected;p.program_scene=programScene;
@@ -291,6 +336,11 @@ void populateMicrophones() {
     SendMessage(box,CB_SETCURSEL,selection,0);
 }
 void command(int id) {
+    if(id>=RenameScene && id<=SceneDown) {
+        // A rejected scene edit must not stop an ongoing recording.
+        try {editScene(id);}catch(const std::exception& e) {if(smoke) throw;MessageBoxA(window,e.what(),"Cenas",MB_OK|MB_ICONINFORMATION);}
+        return;
+    }
     if(id==RefreshMicrophones) {
         if(recorder) throw std::runtime_error("Stop recording before refreshing microphones");
         microphones=microphone_devices();populateMicrophones();return;
@@ -476,6 +526,13 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             SendMessage(css,EM_SETLIMITTEXT,65536,0);
             control(L"BUTTON",L"Aplicar CSS selecionado",ApplyBrowserCss,15,810,195,30);
             control(L"BUTTON",L"Recarregar navegador",ReloadBrowser,15,850,195,30);
+            control(L"STATIC",L"Nome da cena selecionada",0,15,895,250,20);
+            auto sceneName=control(L"EDIT",L"",SceneName,15,920,235,27,WS_BORDER|ES_AUTOHSCROLL);SendMessage(sceneName,EM_SETLIMITTEXT,512,0);
+            control(L"BUTTON",L"Renomear",RenameScene,260,920,110,28);
+            control(L"BUTTON",L"Duplicar cena",DuplicateScene,380,920,130,28);
+            control(L"BUTTON",L"Excluir cena",DeleteScene,520,920,130,28);
+            control(L"BUTTON",L"Subir cena",SceneUp,660,920,105,28);
+            control(L"BUTTON",L"Descer cena",SceneDown,775,920,105,28);
             addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
@@ -527,6 +584,19 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     verify(native.at(400,180).b==.5f && native.at(1000,600).a==0);
                     SendMessage(hwnd,WM_COMMAND,SaveProject,0);SendMessage(hwnd,WM_COMMAND,OpenProject,0);
                     verify(canvasHeight==720 && snapshotProject().canvas_height==720 && program->render(now()).width()==1280);
+                    const auto live=scenes.at(programScene);const int originalCount=static_cast<int>(scenes.size());
+                    SendMessage(hwnd,WM_COMMAND,DuplicateScene,0);verify(static_cast<int>(scenes.size())==originalCount+1 && scenes[selected]!=live);
+                    auto key=ids[selected].front();verify(scenes[selected]->item(key).source==live->item(key).source);
+                    int liveX=live->item(key).x;scenes[selected]->item(key).x=liveX+17;verify(live->item(key).x==liveX);
+                    SetWindowTextW(GetDlgItem(hwnd,SceneName),L"Duplicada teste");SendMessage(hwnd,WM_COMMAND,RenameScene,0);verify(sceneNames[selected]=="Duplicada teste");
+                    SendMessage(hwnd,WM_COMMAND,SceneUp,0);verify(scenes.at(programScene)==live);
+                    SendMessage(hwnd,WM_COMMAND,SceneDown,0);verify(scenes.at(programScene)==live);
+                    SendMessage(hwnd,WM_COMMAND,SaveProject,0);auto scenesSaved=encode_project(snapshotProject());SendMessage(hwnd,WM_COMMAND,OpenProject,0);verify(encode_project(snapshotProject())==scenesSaved);
+                    SendMessage(hwnd,WM_COMMAND,SceneUp,0);auto liveBeforeDelete=scenes.at(programScene);
+                    SendMessage(hwnd,WM_COMMAND,DeleteScene,0);verify(static_cast<int>(scenes.size())==originalCount && scenes.at(programScene)==liveBeforeDelete);
+                    selected=programScene;refreshScenes();auto protectedState=encode_project(snapshotProject());
+                    bool activeRejected=false;try {editScene(DeleteScene);}catch(const std::exception&) {activeRejected=true;}
+                    verify(activeRejected && encode_project(snapshotProject())==protectedState);
                     std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
@@ -555,7 +625,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR cmd,int show) {
     if(!InitCommonControlsEx(&common)) {MFShutdown();CoUninitialize();return 1;}
     WNDCLASS cls{};cls.lpfnWndProc=proc;cls.hInstance=instance;cls.lpszClassName=L"VisionIndependentStudio";cls.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);cls.hCursor=LoadCursor(nullptr,IDC_ARROW);
     if(!RegisterClass(&cls)) {MFShutdown();CoUninitialize();return 1;}
-    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,950,nullptr,nullptr,instance,nullptr);
+    HWND main=CreateWindow(cls.lpszClassName,L"Vision Track Studio - desenvolvimento independente",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,930,1010,nullptr,nullptr,instance,nullptr);
     if(!main) {MFShutdown();CoUninitialize();return 1;}ShowWindow(main,show);
     MSG message{};int status;
     while((status=GetMessage(&message,nullptr,0,0))>0) {TranslateMessage(&message);DispatchMessage(&message);}

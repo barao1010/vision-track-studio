@@ -50,7 +50,8 @@ int main() {
     near(sw.render(0).at(0,0).r,1);f=sw.render(50);near(f.at(0,0).r,.5f);near(f.at(0,0).b,.5f);
     auto green=solid({0,1,0,1});sw.take(green,50,100);
     near(sw.render(50).at(0,0).r,.5f);near(sw.render(100).at(0,0).g,.5f);
-    near(sw.render(150).at(0,0).g,1);sw.take(red,150,0);near(sw.render(150).at(0,0).r,1);
+    check(sw.references(red) && sw.references(green));
+    near(sw.render(150).at(0,0).g,1);check(!sw.references(red) && sw.references(green));sw.take(red,150,0);near(sw.render(150).at(0,0).r,1);
     rejects([&]{sw.render(149);});
     // Timestamp-aligned mixing, silence gaps, gain, mute, clipping and meters.
     AudioBlock a{10,1,{.2f,.4f,.6f,.8f}},b{12,1,{.5f,.5f}};

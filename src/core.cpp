@@ -96,6 +96,9 @@ Switcher::Switcher(int w,int h,std::shared_ptr<const Scene> initial):width_(w),h
     require(current_!=nullptr,"Initial scene required");
     Frame validate(w,h);
 }
+bool Switcher::references(const std::shared_ptr<const Scene>& scene) const {
+    return current_==scene || target_==scene;
+}
 void Switcher::check_time(std::int64_t t) { require(t>=0 && t>=clock_,"Nonmonotonic clock"); clock_=t; }
 void Switcher::take(std::shared_ptr<const Scene> next,std::int64_t now,std::int64_t duration) {
     require(next!=nullptr && duration>=0,"Invalid transition");

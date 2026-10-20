@@ -412,3 +412,20 @@ new native-canvas MP4 fixtures cover720p, not1080p. Timings vary between runners
 this short synthetic run is not evidence of sustained real-time capture/render.
 Next prioritize approved UI and render scheduling outside UI, browser audio,
 streaming local validation, extras and installer. Engineering harness not delivered.
+
+## Scene management — 2026-10-20 (Windows validation pending)
+
+Added rename, duplicate, reorder and delete actions to the engineering harness.
+Duplicates copy layer transforms while sharing source ownership, so cameras and
+browser sources are not reopened. Names are trimmed, bounded to512UTF8 bytes and
+checked for duplicates; new scene names avoid collisions after removal. Maximum
+100scenes matches project validation. Reordering updates program index without
+changing its scene; removing an off-air scene adjusts indices and prunes unused
+source definitions. Last scene and scenes referenced by Switcher (including fades)
+cannot be deleted. Rejected scene edits do not stop ongoing recording.
+Added GUI action checks for source identity, transform independence, rename,
+reordering, persistence, off-air removal and active-scene protection. Core tests
+verify reference lifetime during interrupted transitions; local ASan+UBSan passed
+with detect_leaks=0. No dependencies added. Windows validation pending; this is
+not approved final UI or a release. Rendering off UI/browser audio/streaming/
+tracking/Bible/updater/installer remain incomplete.

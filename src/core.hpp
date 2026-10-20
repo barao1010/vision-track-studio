@@ -61,6 +61,7 @@ public:
     void take(std::shared_ptr<const Scene> next, std::int64_t now_ns,
               std::int64_t duration_ns);
     Frame render(std::int64_t now_ns);
+    bool references(const std::shared_ptr<const Scene>& scene) const;
 private:
     int width_, height_;
     std::shared_ptr<const Scene> current_, target_;
