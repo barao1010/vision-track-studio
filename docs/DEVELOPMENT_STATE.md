@@ -478,3 +478,11 @@ Local command execution is currently unavailable: bubblewrap setup reports
 GitHub and must be validated in CI; no local sanitizer run claimed. Local checkout
 will need fetch/fast-forward after the execution environment recovers. Program
 render migration deferred; approved UI/audio browser/streaming/extras still pending.
+
+URL editing validation:2b423df run39423533283 passed all3jobs/26Windows
+contracts. Actual WebView2 CSS/URL replacement/reload pixels passed in12.98s;
+all native recordings retained their criteria; GUI30silent/84tone-mute passed.
+Local execution still fails before command launch with disk-space error; no local
+build or sanitizer claim for this increment. Remote HEAD is authoritative; local
+checkout remains168e610 and must be fast-forwarded after recovery. No package
+published; program render migration and other product gaps remain pending.
