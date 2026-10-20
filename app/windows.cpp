@@ -21,6 +21,7 @@
 #include "audio_buffer.hpp"
 #include "scheduled_output.hpp"
 #include "preview_renderer.hpp"
+#include "program_renderer.hpp"
 #include <numbers>
 #include <algorithm>
 #include <chrono>
@@ -70,6 +71,7 @@ bool smoke=false, smokeAudio=false;
 int smokeStep=0;
 std::unique_ptr<ScheduledOutput> recorder;
 std::unique_ptr<PreviewRenderer> preview;
+std::unique_ptr<ProgramRenderer> programRenderer;
 void recordFrame(std::shared_ptr<const Frame> frame) {
     const bool muted=SendMessage(GetDlgItem(window,Mute),BM_GETCHECK,0,0)==BST_CHECKED;
     const auto db=static_cast<int>(SendMessage(GetDlgItem(window,Gain),TBM_GETPOS,0,0));
@@ -106,7 +108,9 @@ void startRecording(const std::filesystem::path& path) {
     const auto microphoneId=selectedMicrophone;
     const int fps=chosenRate(),height=chosenHeight();
     const int kbps=field(VideoBitrate);recording_video_bps(kbps);
-    auto initial=std::make_shared<Frame>(program->render(now()));
+    std::shared_ptr<const Frame> initial;
+    if(programRenderer) initial=programRenderer->latest().frame;
+    if(!initial) initial=std::make_shared<Frame>(program->render(now()));
     auto starting=std::make_unique<ScheduledOutput>([path,useMicrophone,testAudio,fps,kbps,microphoneId,height]{return create_windows_output(path,useMicrophone,testAudio,fps,kbps,microphoneId,height);},initial,std::pow(10.f,db/20.f),muted,fps);
     EnableWindow(GetDlgItem(window,UseMic),FALSE);
     EnableWindow(GetDlgItem(window,RecordingRate),FALSE);
@@ -118,9 +122,10 @@ void startRecording(const std::filesystem::path& path) {
     recorder=std::move(starting);
     SetWindowText(GetDlgItem(window,Record),useMicrophone?L"Parar gravacao (microfone)":L"Parar gravacao (sem microfone)");
 }
-void captureRecording(std::int64_t timestamp) {
-    if(!recorder) return;
-    recordFrame(std::make_shared<Frame>(program->render(timestamp)));
+void captureRecording(std::int64_t) {
+    if(!recorder || !programRenderer) return;
+    auto latest=programRenderer->latest();
+    if(latest.frame) recordFrame(std::move(latest.frame));
 }
 void hr(HRESULT r) {if(FAILED(r)) throw std::runtime_error("Windows image decoder failed");}
 float linear(BYTE b) {float s=b/255.f;return s<=.04045f?s/12.92f:std::pow((s+.055f)/1.055f,2.4f);}
@@ -433,7 +438,11 @@ void command(int id) {
     else if(id==AddImage) {
         wchar_t path[32768]={};OPENFILENAME ofn{};ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=window;ofn.lpstrFile=path;ofn.nMaxFile=32768;ofn.lpstrFilter=L"Imagens\0*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff\0Todos\0*.*\0";ofn.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
         if(GetOpenFileName(&ofn)) addSource(imageFile(path),{"",SourceKind::image,utf8(std::filesystem::absolute(path)),{0,0,0,1}});
-    } else if(id==Cut || id==Fade) {program->take(scenes[selected],now(),id==Cut?0:300000000);programScene=selected;}
+    } else if(id==Cut || id==Fade) {
+        auto latest=programRenderer?programRenderer->latest():ProgramRenderer::Result{};
+        program->take(scenes[selected],now(),id==Cut?0:300000000,latest.frame.get());
+        programScene=selected;
+    }
     else if(auto* item=selectedItem()) {
         const auto key=item->id;
         if(id==ApplyTransform) {
@@ -543,7 +552,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             control(L"BUTTON",L"Excluir cena",DeleteScene,520,920,130,28);
             control(L"BUTTON",L"Subir cena",SceneUp,660,920,105,28);
             control(L"BUTTON",L"Descer cena",SceneDown,775,920,105,28);
-            preview=std::make_unique<PreviewRenderer>();addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);SetTimer(hwnd,1,33,nullptr);return 0;}
+            preview=std::make_unique<PreviewRenderer>();addScene();program=std::make_unique<Switcher>(canvasWidth(),canvasHeight,scenes[0]);programRenderer=std::make_unique<ProgramRenderer>();programRenderer->update(*program,now());SetTimer(hwnd,1,33,nullptr);return 0;}
         case WM_COMMAND:
             if(LOWORD(wp)==SceneList && HIWORD(wp)==LBN_SELCHANGE) {auto s=SendMessage(scenesBox,LB_GETCURSEL,0,0);if(s!=LB_ERR) {selected=static_cast<int>(s);refresh();}}
             else if(LOWORD(wp)==CanvasResolution && HIWORD(wp)==CBN_SELCHANGE) {
@@ -611,12 +620,22 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
                     std::ofstream("gui-smoke.txt")<<"PASS: window, scene creation, cut, fade, visibility, source removal, MP4 start/stop, project restore and failed-open preservation\n";DestroyWindow(hwnd);return 0;}
                 ++smokeStep;
             }
-            preview->update(*scenes[selected],canvasWidth(),canvasHeight,now());
-            captureRecording(now());
+            {
+                const auto timestamp=now();
+                // Capture live sources on this STA/device-owning thread; both renderers
+                // receive immutable CPU snapshots and never call the devices themselves.
+                programRenderer->update(*program,timestamp);
+                preview->update(*scenes[selected],canvasWidth(),canvasHeight,timestamp);
+                captureRecording(timestamp);
+            }
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
-        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {auto ready=preview->latest();if(ready.frame) draw(dc,*ready.frame,220,45,320,180);else PatBlt(dc,220,45,320,180,BLACKNESS);draw(dc,program->render(now()),560,45,320,180);}}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
+        case WM_PAINT: {PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);try {if(program) {
+            auto ready=preview->latest();if(ready.frame) draw(dc,*ready.frame,220,45,320,180);else PatBlt(dc,220,45,320,180,BLACKNESS);
+            auto output=programRenderer?programRenderer->latest():ProgramRenderer::Result{};
+            if(output.frame) draw(dc,*output.frame,560,45,320,180);else PatBlt(dc,560,45,320,180,BLACKNESS);
+        }}catch(...) {EndPaint(hwnd,&ps);KillTimer(hwnd,1);throw;}EndPaint(hwnd,&ps);return 0;}
         case WM_CLOSE: stopRecording();DestroyWindow(hwnd);return 0;
-        case WM_DESTROY: preview.reset();recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
+        case WM_DESTROY: preview.reset();programRenderer.reset();recorder.reset();KillTimer(hwnd,1);program.reset();scenes.clear();PostQuitMessage(0);return 0;
         }
     }catch(const std::exception& e) {
         // An output failure ends this session; do not retry partial samples.

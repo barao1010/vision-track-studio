@@ -503,3 +503,24 @@ Rebuilt render_fixture from current sources and reran the full local comparison:
 silence/hard-cut negative controls were rejected. Failure-path cleanup exercised
 with a failing renderer; successful report contains no raw directory. No full
 OBS parity or hardware validation inferred. Windows/CI validation pending.
+
+
+## Program composition worker — 2026-10-20 (CI validation pending)
+
+Added a separate bounded ProgramRenderer. Switcher snapshots every visible source
+on the caller thread, freezing frames so browser STA and camera/device ownership
+never cross to the worker. The worker composes the complete program frame and
+transition from immutable snapshots. A single pending task is replaced by newer
+program state; paint and recording consume the latest completed frame without
+calling Switcher::render on the UI thread. When a fade is interrupted, the UI
+passes the last completed program frame into Switcher so the next fade begins
+without a synchronous render or a visual jump. Start/stop recording can still
+block while initializing/finalizing the encoder, and live-source capture remains
+on the UI thread; this is not a complete source scheduler or performance claim.
+
+New core contracts cover caller-thread source sampling, off-thread composition,
+cut/fade pixels, interruption continuity, latest-state replacement and shutdown.
+No dependencies added. Windows CI must validate integration and all existing
+recording/GUI contracts before this increment is marked verified. Hardware,
+browser audio, final approved interface, streaming, PTZ/Bible, updater and installer
+remain incomplete; no package is authorized for delivery.

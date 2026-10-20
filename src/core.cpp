@@ -113,12 +113,42 @@ bool Switcher::references(const std::shared_ptr<const Scene>& scene) const {
     return current_==scene || target_==scene;
 }
 void Switcher::check_time(std::int64_t t) { require(t>=0 && t>=clock_,"Nonmonotonic clock"); clock_=t; }
-void Switcher::take(std::shared_ptr<const Scene> next,std::int64_t now,std::int64_t duration) {
+void Switcher::take(std::shared_ptr<const Scene> next,std::int64_t now,std::int64_t duration,const Frame* latest_output) {
     require(next!=nullptr && duration>=0,"Invalid transition");
+    if(latest_output) require(latest_output->width()==width_ && latest_output->height()==height_,"Invalid interrupted output frame");
     check_time(now);
     if(duration==0) {current_=std::move(next);target_.reset();interrupted_.reset();return;}
-    if(target_) interrupted_=std::make_unique<Frame>(render(now));
+    if(target_) interrupted_=std::make_unique<Frame>(latest_output?*latest_output:render(now));
     target_=std::move(next); start_=now; duration_=duration;
+}
+std::function<Frame()> Switcher::snapshot(std::int64_t now) {
+    check_time(now);
+    const auto freeze=[now](const std::shared_ptr<const Scene>& scene) {
+        return std::make_shared<Scene>(scene->snapshot(now));
+    };
+    const auto single=[this,now](std::shared_ptr<const Scene> scene) {
+        const int width=width_,height=height_;
+        return std::function<Frame()>([scene=std::move(scene),width,height,now] {
+            return scene->render(width,height,now);
+        });
+    };
+    if(!target_) return single(freeze(current_));
+    if(now-start_>=duration_) {
+        current_=std::move(target_);interrupted_.reset();
+        return single(freeze(current_));
+    }
+    std::shared_ptr<const Frame> interrupted;
+    if(interrupted_) interrupted=std::make_shared<Frame>(*interrupted_);
+    auto current=interrupted?std::shared_ptr<const Scene>{}:freeze(current_);
+    auto target=freeze(target_);
+    const int width=width_,height=height_;
+    const float t=static_cast<float>(static_cast<double>(now-start_)/static_cast<double>(duration_));
+    return [current=std::move(current),target=std::move(target),interrupted=std::move(interrupted),width,height,now,t] {
+        Frame a=interrupted?*interrupted:current->render(width,height,now);
+        const Frame b=target->render(width,height,now);
+        for(int y=0;y<height;++y) for(int x=0;x<width;++x) a.at(x,y)=blend(a.at(x,y),b.at(x,y),t);
+        return a;
+    };
 }
 Frame Switcher::render(std::int64_t now) {
     check_time(now);

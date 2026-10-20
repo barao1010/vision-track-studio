@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <span>
+#include <functional>
 
 namespace vision {
 // Linear-light, straight-alpha pixels. Output adapters own colour conversion.
@@ -61,7 +62,10 @@ class Switcher {
 public:
     Switcher(int width, int height, std::shared_ptr<const Scene> initial);
     void take(std::shared_ptr<const Scene> next, std::int64_t now_ns,
-              std::int64_t duration_ns);
+              std::int64_t duration_ns,const Frame* latest_output=nullptr);
+// Capture source frames on the caller's thread and return a self-contained
+// composition task. The returned task never calls live VideoSource objects.
+std::function<Frame()> snapshot(std::int64_t now_ns);
     Frame render(std::int64_t now_ns);
     bool references(const std::shared_ptr<const Scene>& scene) const;
 private:
