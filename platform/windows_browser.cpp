@@ -18,6 +18,11 @@ std::wstring javascriptString(const std::wstring& text) {
     for(auto c:text) {auto n=static_cast<unsigned short>(c);out+=L"\\u";for(int shift=12;shift>=0;shift-=4) out+=hex[(n>>shift)&15];}
     return out+L"\"";
 }
+void validUrl(const std::wstring& url) {
+    if(url.empty() || url.size()>32768 || url.find(L'\0')!=std::wstring::npos ||
+       !(url.starts_with(L"https://") || url.starts_with(L"http://") || url==L"about:blank"))
+        throw std::invalid_argument("Browser URL must use HTTP or HTTPS and fit within 32768 characters");
+}
 float linear(BYTE v) {float s=v/255.f;return s<=.04045f?s/12.92f:std::pow((s+.055f)/1.055f,2.4f);}
 Frame decode(IStream* stream,int width,int height) {
     LARGE_INTEGER zero{};check(stream->Seek(zero,STREAM_SEEK_SET,nullptr));
@@ -57,8 +62,7 @@ struct BrowserSource::State {
 };
 BrowserSource::BrowserSource(std::wstring url,std::wstring css,int width,int height,std::wstring html):state_(std::make_shared<State>()) {
     if(width<1 || height<1 || width>1920 || height>1080 || css.size()>65536 || html.size()>1024*1024) throw std::invalid_argument("Invalid browser source dimensions/content");
-    if(html.empty() && !(url.starts_with(L"https://") || url.starts_with(L"http://") || url==L"about:blank"))
-        throw std::invalid_argument("Browser URL must use HTTP or HTTPS");
+    if(html.empty()) validUrl(url);
     auto s=state_;s->width=width;s->height=height;s->url=std::move(url);s->css=std::move(css);s->html=std::move(html);
     s->host=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,L"STATIC",L"Vision browser source",WS_POPUP|WS_VISIBLE,-10000,-10000,width,height,nullptr,nullptr,GetModuleHandle(nullptr),nullptr);
     if(!s->host) throw std::runtime_error("Browser host creation failed");
@@ -129,6 +133,16 @@ void BrowserSource::set_css(std::wstring css) const {
     auto s=state_;if(s->error) std::rethrow_exception(s->error);
     if(!s->ready) throw std::runtime_error("Wait for the browser to finish loading before editing CSS");
     s->css=std::move(css);s->started=std::chrono::steady_clock::now();apply_css(s);
+}
+void BrowserSource::navigate(std::wstring url) const {
+    validUrl(url);auto s=state_;
+    if(!s->web) throw std::runtime_error("Browser is still initializing");
+    if(!s->ready && !s->error) throw std::runtime_error("Browser is already loading");
+    s->ready=false;s->latest.reset();s->error=nullptr;++s->generation;
+    s->started=std::chrono::steady_clock::now();
+    try {check(s->web->Navigate(url.c_str()));}
+    catch(...) {s->fail();throw;}
+    s->url=std::move(url);s->html.clear();
 }
 void BrowserSource::reload() const {
     auto s=state_;if(!s->web) throw std::runtime_error("Browser is still initializing");

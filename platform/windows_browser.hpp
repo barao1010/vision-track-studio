@@ -10,6 +10,7 @@ public:
     ~BrowserSource();
     void set_css(std::wstring css) const;
     void reload() const;
+    void navigate(std::wstring url) const;
     Frame frame(std::int64_t timestamp_ns) const override;
 private:
     struct State;

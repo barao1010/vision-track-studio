@@ -461,3 +461,20 @@ snapshot/replacement/error tests. All native MP4 decodes retained existing crite
 GUI28silent/85tone-mute recordings passed. Local renderer tests passed ASan+UBSan
 with detect_leaks=0. This validates preview composition migration only; no physical
 capture, performance guarantee, final UI or full program-render migration claimed.
+
+
+## Browser URL properties — 2026-10-20 (Windows validation pending)
+
+Added same-source URL navigation and an Apply URL action, preserving source identity,
+layer transforms and CSS. Accepted addresses are HTTP/HTTPS/about:blank with bounded
+length and no embedded NUL. Invalid addresses are rejected before changing state.
+Navigation clears stale captures immediately; reload uses the new URL rather than
+previous inline test HTML. Accepted URL persists in the existing project descriptor.
+Tests retain all previous CSS/transparency thresholds and add invalid-URL state
+preservation plus a real about:blank navigation whose CSS produces different pixels,
+then reload verification. No new dependency or public network test target.
+Local command execution is currently unavailable: bubblewrap setup reports
+'No space left on device' before commands start. This increment is edited through
+GitHub and must be validated in CI; no local sanitizer run claimed. Local checkout
+will need fetch/fast-forward after the execution environment recovers. Program
+render migration deferred; approved UI/audio browser/streaming/extras still pending.

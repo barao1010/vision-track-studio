@@ -30,7 +30,7 @@
 using namespace vision;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168, CanvasResolution=169, SceneName=170, RenameScene=171, DuplicateScene=172, DeleteScene=173, SceneUp=174, SceneDown=175;
+constexpr int SceneList=101, AddScene=102, AddImage=103, SourceList=104, Toggle=105, Remove=106, Cut=107, Fade=108, Smaller=109, Larger=110, AddDesktop=111, Record=112, UseMic=113, Mute=114, Gain=115, MeterLabel=116, SaveProject=117, OpenProject=118, LayerUp=119, LayerDown=120, ApplyTransform=121, TransformFirst=130, CameraList=150, RefreshCameras=151, AddCamera=152, ReconnectCamera=153, RecordingRate=154, BrowserUrl=160, BrowserCss=161, AddBrowser=162, ApplyBrowserCss=163, ReloadBrowser=164, VideoBitrate=165, MicrophoneList=166, RefreshMicrophones=167, OutputResolution=168, CanvasResolution=169, SceneName=170, RenameScene=171, DuplicateScene=172, DeleteScene=173, SceneUp=174, SceneDown=175, ApplyBrowserUrl=176;
 HWND window=nullptr,scenesBox=nullptr,sourcesBox=nullptr;
 std::vector<std::shared_ptr<Scene>> scenes;
 std::vector<std::vector<std::string>> ids;
@@ -348,11 +348,18 @@ void command(int id) {
         microphones=microphone_devices();populateMicrophones();return;
     }
     if(id==UseMic || id==Mute) return;
-    if(id==ApplyBrowserCss || id==ReloadBrowser) {
+    if(id==ApplyBrowserCss || id==ReloadBrowser || id==ApplyBrowserUrl) {
         auto* item=selectedItem();
         auto source=item?std::dynamic_pointer_cast<const BrowserSource>(item->source):nullptr;
         if(!source) throw std::runtime_error("Select a browser source");
         if(id==ReloadBrowser) source->reload();
+        else if(id==ApplyBrowserUrl) {
+            auto handle=GetDlgItem(window,BrowserUrl);int n=GetWindowTextLengthW(handle);
+            std::wstring url(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,url.data(),n+1);url.resize(n);
+            auto encoded=utf8(std::filesystem::path(url));
+            if(encoded.size()>32768) throw std::invalid_argument("Browser URL exceeds project size limit");
+            source->navigate(std::move(url));definitions.at(item->source).path=std::move(encoded);
+        }
         else {
             auto handle=GetDlgItem(window,BrowserCss);int n=GetWindowTextLengthW(handle);
             std::wstring css(static_cast<std::size_t>(n)+1,L'\0');GetWindowTextW(handle,css.data(),n+1);css.resize(n);
@@ -527,7 +534,8 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
             auto css=control(L"EDIT",L"html,body { background: transparent !important; margin: 0; }",BrowserCss,220,824,660,65,WS_BORDER|ES_MULTILINE|ES_AUTOVSCROLL|WS_VSCROLL);
             SendMessage(css,EM_SETLIMITTEXT,65536,0);
             control(L"BUTTON",L"Aplicar CSS selecionado",ApplyBrowserCss,15,810,195,30);
-            control(L"BUTTON",L"Recarregar navegador",ReloadBrowser,15,850,195,30);
+            control(L"BUTTON",L"Recarregar",ReloadBrowser,15,850,95,30);
+            control(L"BUTTON",L"Aplicar URL",ApplyBrowserUrl,115,850,95,30);
             control(L"STATIC",L"Nome da cena selecionada",0,15,895,250,20);
             auto sceneName=control(L"EDIT",L"",SceneName,15,920,235,27,WS_BORDER|ES_AUTOHSCROLL);SendMessage(sceneName,EM_SETLIMITTEXT,512,0);
             control(L"BUTTON",L"Renomear",RenameScene,260,920,110,28);
