@@ -429,3 +429,11 @@ verify reference lifetime during interrupted transitions; local ASan+UBSan passe
 with detect_leaks=0. No dependencies added. Windows validation pending; this is
 not approved final UI or a release. Rendering off UI/browser audio/streaming/
 tracking/Bible/updater/installer remain incomplete.
+
+Scene management validation:6ad7837 run39383422975 passed all3jobs/25Windows
+contracts. GUI tests exercised duplicate/shared source identity, independent layer
+position, rename, reorder without changing live scene, save/open roundtrip,
+removal before the live scene index, and active-scene rejection without state loss.
+All native MP4/multirate/bitrate/canvas decodes passed unchanged. GUI30silent and
+84tone/mute frames passed. This is functional scene management in the engineering
+harness, not final UI, hardware certification or full OBS equivalence.
