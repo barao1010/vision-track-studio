@@ -454,3 +454,10 @@ IMPORTANT: this moves PREVIEW composition only. Capture still runs on UI to resp
 browser STA ownership; PROGRAM composition/transitions/recording producer remain
 on UI. It is not a complete render-thread migration or sustained-performance claim.
 Final approved interface, browser audio, streaming and extras remain incomplete.
+
+Preview worker validation:30a31d8 run39390840482 passed all3jobs/26Windows
+contracts, including asynchronous GUI preview pixels and source-affinity/frozen-
+snapshot/replacement/error tests. All native MP4 decodes retained existing criteria;
+GUI28silent/85tone-mute recordings passed. Local renderer tests passed ASan+UBSan
+with detect_leaks=0. This validates preview composition migration only; no physical
+capture, performance guarantee, final UI or full program-render migration claimed.
